@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latihan Terjemahan AI (Pembaruan Audio & AI)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* slate-50 */ color: #334155; /* slate-700 */ }
+        .app-screen { transition: opacity 0.4s ease-in-out; width: 100%; }
+        .loader-container, .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1rem; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
+        .loader-container.visible, .modal-overlay.visible { opacity: 1; pointer-events: auto; }
+        .loader-container { background-color: rgba(248, 250, 252, 0.9); }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+        .modal-content { background: white; padding: 2rem; border-radius: 1rem; width: 90%; max-width: 400px; text-align: center; transform: scale(0.95); transition: transform 0.3s ease-in-out; }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        .loader { border: 5px solid #e2e8f0; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        .loader.analysis { border-top: 5px solid #3b82f6; }
+        .small-loader { width: 18px; height: 18px; border: 2px solid #94a3b8; border-top-color: #475569; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .progress-bar-fill { transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+        .input-wrapper { position: relative; width: 100%; }
+        .highlighter, #translation-input { width: 100%; min-height: 48px; max-height: 120px; padding: 0.75rem; border-radius: 0.75rem; font-family: inherit; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-y: auto; }
+        #translation-input { position: relative; z-index: 2; background-color: transparent; color: #1e293b; resize: none; font-size: 1rem; }
+        .highlighter { position: absolute; top: 0; left: 0; z-index: 1; color: transparent; }
+        .highlighter mark, #compare-original mark, #compare-user mark { background-color: transparent; padding: 0; margin: 0; }
+        mark.typo { background: linear-gradient(180deg, transparent 65%, rgba(250, 204, 21, 0.7) 65%); }
+        mark.highlight-sangat-buruk { background: linear-gradient(180deg, transparent 65%, rgba(239, 68, 68, 0.7) 65%); }
+        mark.highlight-buruk { background: linear-gradient(180deg, transparent 65%, rgba(249, 115, 22, 0.7) 65%); }
+        mark.highlight-cukup { background: linear-gradient(180deg, transparent 65%, rgba(234, 179, 8, 0.7) 65%); }
+        .segmented-control { display: flex; background-color: #e2e8f0; border-radius: 0.75rem; padding: 0.25rem; position: relative; }
+        .segmented-control .option { flex: 1; padding: 0.5rem 1rem; font-weight: 600; text-align: center; border-radius: 0.625rem; cursor: pointer; z-index: 1; transition: color 0.3s ease; }
+        .segmented-control .glider { position: absolute; height: calc(100% - 0.5rem); background-color: white; border-radius: 0.625rem; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #mode-toggle .glider { width: calc(50% - 0.125rem); }
+        #paragraphs-toggle .glider { width: calc(100% / 5 - 0.25rem * 4 / 5); }
+        .focus-details { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-in-out, padding-top 0.4s ease-in-out, margin-top 0.4s ease-in-out; }
+        .focus-details.expanded { max-height: 600px; padding-top: 1rem; margin-top: 1rem; }
+        .chevron-icon { transition: transform 0.3s ease; }
+        .aspect-header.expanded .chevron-icon { transform: rotate(180deg); }
+        .circular-progress { position: relative; width: 160px; height: 160px; }
+        .circular-progress svg { transform: rotate(-90deg); }
+        .circular-progress-bg { fill: none; stroke: #e2e8f0; }
+        .circular-progress-bar { fill: none; stroke-linecap: round; transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .circular-progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        .slider-container { position: relative; padding-top: 1rem; }
+        input[type="range"] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type="range"]:focus { outline: none; }
+        input[type="range"]::-webkit-slider-runnable-track { width: 100%; height: 6px; cursor: pointer; background: #e2e8f0; border-radius: 3px; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; border: 3px solid #fff; height: 20px; width: 20px; border-radius: 50%; background: #3b82f6; cursor: pointer; margin-top: -7px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.1s ease-in-out; }
+        input[type="range"]:active::-webkit-slider-thumb { transform: scale(1.1); }
+        #duration-fill { position: absolute; height: 6px; background: #3b82f6; border-radius: 3px; top: 1rem; left: 0; pointer-events: none; }
+        #duration-tooltip { position: absolute; top: -10px; background: #334155; color: white; padding: 4px 8px; border-radius: 5px; font-size: 0.8rem; font-weight: 600; transform: translateX(-50%); pointer-events: none; opacity: 0; transition: opacity 0.2s; white-space: nowrap; }
+        .slider-container:hover #duration-tooltip, input[type="range"]:active ~ #duration-tooltip { opacity: 1; }
+        .dots-loader { display: flex; gap: 0.5rem; }
+        .dots-loader div { width: 10px; height: 10px; background-color: #94a3b8; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .dots-loader .dot1 { animation-delay: -0.32s; }
+        .dots-loader .dot2 { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1.0); } }
+        .domain-card.selected { border-color: #3b82f6; box-shadow: 0 0 0 2px #3b82f6; background-color: #eff6ff; }
+        #free-practice-settings { transition: opacity 0.3s ease, max-height 0.5s ease; overflow: hidden; }
+        .chart-bar { transition: height 0.8s ease-out; }
+        .highlight-trigger-btn .btn-loader { display: none; }
+        .highlight-trigger-btn.loading .btn-text { display: none; }
+        .highlight-trigger-btn.loading .btn-loader { display: inline-block; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="loader-container" class="loader-container">
+        <div id="main-loader" class="loader"></div>
+        <p id="loader-text" class="text-slate-600 font-semibold text-lg">Memuat...</p>
+    </div>
+
+    <div id="confirmation-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-bold text-slate-800 mb-2">Konfirmasi</h3>
+            <p id="modal-message" class="text-slate-600 mb-6"></p>
+            <div class="flex gap-3">
+                <button id="modal-cancel-btn" class="w-full bg-slate-100 text-slate-700 font-bold py-2.5 px-4 rounded-lg hover:bg-slate-200 transition-colors">Batal</button>
+                <button id="modal-confirm-btn" class="w-full bg-red-600 text-white font-bold py-2.5 px-4 rounded-lg hover:bg-red-700 transition-colors">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        
+        <div id="main-menu-screen" class="app-screen py-8 md:py-12">
+            <header class="text-center mb-10">
+                <h1 class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter">Latihan Terjemahan AI</h1>
+                <p id="main-menu-subtitle" class="text-slate-500 mt-3 text-lg max-w-xl mx-auto">Atur sendiri tingkat kesulitan, durasi, dan topik latihan Anda.</p>
+            </header>
+
+            <div id="mode-toggle" class="segmented-control mb-8 max-w-sm mx-auto">
+                <div class="glider"></div>
+                <div class="option" data-value="free">Latihan Bebas</div>
+                <div class="option" data-value="exam">Ujian 5 Tahap</div>
+            </div>
+            
+            <div class="space-y-8">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Pengaturan Dasar</h2>
+                    <div class="border-y border-slate-200">
+                        <div class="flex justify-between items-center py-3.5 px-2">
+                            <label class="font-semibold text-slate-700">Arah Terjemahan</label>
+                            <button id="direction-toggle-btn" class="flex items-center gap-3 font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 px-4 py-2 rounded-lg transition-colors">
+                                <span id="lang-from" class="w-4 text-center">EN</span>
+                                <svg id="direction-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="transition-transform duration-300" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5m14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5"/></svg>
+                                <span id="lang-to" class="w-4 text-center">ID</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="free-practice-settings" class="space-y-8">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Pengaturan Lanjutan</h2>
+                        <div class="divide-y divide-slate-200 border-y border-slate-200">
+                            <div class="flex justify-between items-center py-3.5 px-2"><label id="level-label" class="font-semibold text-slate-700">Tingkat Bahasa</label><div class="flex items-center gap-2"><button id="level-prev" class="control-btn p-2 hover:bg-slate-100 rounded-full disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg></button><span id="level-value" class="font-semibold text-slate-800 w-28 text-center">Menengah</span><button id="level-next" class="control-btn p-2 hover:bg-slate-100 rounded-full disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg></button></div></div>
+                            <div class="py-3.5 px-2 space-y-2"><div class="flex justify-between items-center"><label for="duration" class="font-semibold text-slate-700">Durasi</label><span id="duration-label" class="font-bold text-blue-600">Tak Terbatas</span></div><div class="slider-container"><div id="duration-fill"></div><input id="duration" type="range" min="0" max="1200" step="15" value="0" class="w-full"><div id="duration-tooltip"></div></div></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Struktur Teks</h2>
+                        <div class="divide-y divide-slate-200 border-y border-slate-200">
+                            <div class="flex justify-between items-center py-3.5 px-2"><label class="font-semibold text-slate-700">Jumlah Paragraf</label><div id="paragraphs-toggle" class="segmented-control w-52"><div class="glider"></div><div class="option text-slate-800" data-value="1">1</div><div class="option text-slate-500" data-value="2">2</div><div class="option text-slate-500" data-value="3">3</div><div class="option text-slate-500" data-value="4">4</div><div class="option text-slate-500" data-value="5">5</div></div></div>
+                            <div class="flex justify-between items-center py-3.5 px-2"><label class="font-semibold text-slate-700">Panjang Paragraf</label><div class="flex items-center gap-2"><button id="length-prev" class="control-btn p-2 hover:bg-slate-100 rounded-full disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg></button><span id="length-value" class="font-semibold text-slate-800 w-28 text-center">Pendek</span><button id="length-next" class="control-btn p-2 hover:bg-slate-100 rounded-full disabled:opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg></button></div></div>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">Kustomisasi Konten (Opsional)</h2>
+                        <div class="divide-y divide-slate-200 border-y border-slate-200">
+                            <div class="flex justify-between items-center py-3.5 px-2"><label for="domain-input" class="font-semibold text-slate-700">Domain</label><input id="domain-input" type="text" placeholder="cth: Teknologi" class="w-1/2 sm:w-52 text-right bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></div>
+                            <div class="flex justify-between items-center py-3.5 px-2"><label for="topic-input" class="font-semibold text-slate-700">Topik</label><input id="topic-input" type="text" placeholder="cth: Mobil Otonom" class="w-1/2 sm:w-52 text-right bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></div>
+                            <div class="flex justify-between items-center py-3.5 px-2"><label for="style-input" class="font-semibold text-slate-700">Gaya Bahasa</label><input id="style-input" type="text" placeholder="cth: Artikel Berita" class="w-1/2 sm:w-52 text-right bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <footer class="pt-10 pb-8">
+                <button id="main-start-btn" class="w-full bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">Mulai Latihan</button>
+            </footer>
+        </div>
+
+        <div id="stage-intro-screen" class="app-screen hidden py-8 md:py-12">
+            <header class="text-center mb-10">
+                <h1 id="stage-intro-title" class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter"></h1>
+                <p id="stage-intro-subtitle" class="text-slate-500 mt-3 text-lg max-w-xl mx-auto"></p>
+            </header>
+            <div class="space-y-8">
+                <div id="stage-settings-display" class="flex justify-center gap-4 text-center text-sm"></div>
+                <div>
+                    <h2 class="text-lg font-bold text-center text-slate-800 mb-4">Pilih Domain (4 Opsi Acak)</h2>
+                    <div id="stage-domain-selection" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    <p id="domain-error" class="text-red-600 text-sm mt-2 text-center hidden">Silakan pilih salah satu domain.</p>
+                </div>
+            </div>
+            <footer class="pt-10 pb-8 flex items-center gap-4">
+                <button id="back-to-menu-from-stage" class="w-1/3 bg-slate-100 text-slate-700 font-bold py-3.5 px-4 rounded-lg hover:bg-slate-200 transition-all">Menu Utama</button>
+                <button id="start-stage-btn" class="w-2/3 bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 text-lg shadow-lg">Mulai Tahap</button>
+            </footer>
+        </div>
+
+        <div id="practice-screen" class="app-screen hidden">
+            <div id="practice-container" class="flex flex-col h-[calc(100vh-1rem)]">
+                <header class="py-2.5 border-b border-slate-200 flex-shrink-0"><div class="grid grid-cols-3 items-center"><div class="flex justify-start"><button id="back-btn" class="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full" title="Keluar"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button></div><div class="text-center"><h3 id="practice-header-title" class="font-semibold text-slate-800 text-lg"></h3><div id="timer-display" class="hidden items-center justify-center gap-2 text-sm font-semibold text-slate-800"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span id="timer-label"></span></div></div><div class="flex justify-end"><button id="header-submit-btn" class="bg-blue-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 focus:ring-blue-500 transition-all text-sm">Selesai</button></div></div></header>
+                <main class="py-6 flex-grow overflow-y-auto">
+                    <div id="practice-info-display" class="hidden p-4 mb-4 bg-slate-100 rounded-lg space-y-1 text-sm"></div>
+                    <p id="instruction-text" class="mb-4 text-slate-500"></p>
+                    <div id="source-text" class="text-slate-700 leading-relaxed text-base md:text-lg space-y-4"></div>
+                </main>
+                <footer class="flex-shrink-0 bg-slate-50 pt-2 pb-12"><div id="status-message" class="text-sm mb-1 text-center opacity-0 transition-all duration-300 h-6"></div><div class="flex flex-col gap-2"><div class="input-wrapper bg-white border border-slate-200 rounded-xl shadow-sm"><div class="highlighter"></div><textarea id="translation-input" rows="1" class="border-transparent focus:ring-0 focus:border-transparent" placeholder="Ketik terjemahan Anda..."></textarea></div></div></footer>
+            </div>
+        </div>
+
+        <div id="results-screen" class="app-screen hidden py-8 space-y-6">
+             <section id="main-score-section" class="flex flex-col items-center text-center py-6"></section>
+             <div class="bg-slate-100 p-1 rounded-xl flex space-x-1"><button id="btn-aspect-view" class="w-1/3 py-2.5 font-semibold text-sm rounded-lg transition-all duration-300">Aspek</button><button id="btn-comparison-view" class="w-1/3 py-2.5 font-semibold text-sm rounded-lg transition-all duration-300">Teks</button><button id="btn-insights-view" class="w-1/3 py-2.5 font-semibold text-sm rounded-lg transition-all duration-300">Wawasan</button></div>
+            <div id="view-container">
+                <div id="aspect-view"></div>
+                <div id="comparison-view" class="hidden">
+                    <div id="text-comparison-container">
+                        <section id="compare-original-section" class="py-5 border-b border-slate-200">
+                            <h3 id="compare-original-title" class="font-semibold text-slate-800 text-base mb-3"></h3>
+                            <p id="compare-original" class="text-slate-700 leading-relaxed text-sm"></p>
+                            <div class="mt-4 flex items-center justify-between gap-4">
+                                <button class="highlight-trigger-btn flex-grow bg-slate-100 text-slate-700 text-sm font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2" data-target="original">
+                                    <span class="btn-text">Sorot Kesalahan</span>
+                                    <span class="btn-loader"><div class="small-loader"></div></span>
+                                </button>
+                                <div class="reorder-controls flex-shrink-0 flex items-center">
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="up" title="Pindahkan ke atas"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708z"/></svg></button>
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="down" title="Pindahkan ke bawah"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></button>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="compare-user-section" class="py-5 border-b border-slate-200">
+                            <h3 id="compare-user-title" class="font-semibold text-slate-800 text-base mb-3"></h3>
+                            <p id="compare-user" class="text-slate-700 leading-relaxed text-sm"></p>
+                             <div class="mt-4 flex items-center justify-between gap-4">
+                                <button class="highlight-trigger-btn flex-grow bg-slate-100 text-slate-700 text-sm font-semibold py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-2" data-target="user">
+                                    <span class="btn-text">Sorot Kesalahan</span>
+                                    <span class="btn-loader"><div class="small-loader"></div></span>
+                                </button>
+                                <div class="reorder-controls flex-shrink-0 flex items-center">
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="up" title="Pindahkan ke atas"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708z"/></svg></button>
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="down" title="Pindahkan ke bawah"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></button>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="compare-ai-section" class="py-5">
+                            <h3 id="compare-ai-title" class="font-semibold text-slate-800 text-base mb-3"></h3>
+                            <p id="compare-ai" class="text-slate-700 leading-relaxed text-sm"></p>
+                            <div class="mt-4 flex items-center justify-between gap-4">
+                                <div class="flex-grow flex justify-center items-center bg-slate-100 rounded-lg p-1">
+                                    <button id="prev-ai-btn" class="p-2 text-slate-500 hover:bg-slate-200 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg></button>
+                                    <span id="ai-translation-counter" class="font-semibold text-sm text-slate-600 w-20 text-center">1 / 3</span>
+                                    <button id="next-ai-btn" class="p-2 text-slate-500 hover:bg-slate-200 rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg></button>
+                                </div>
+                                <div class="reorder-controls flex-shrink-0 flex items-center">
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="up" title="Pindahkan ke atas"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708z"/></svg></button>
+                                    <button class="reorder-btn p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full disabled:opacity-30" data-direction="down" title="Pindahkan ke bawah"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg></button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div id="insights-view" class="hidden">
+                    <div id="insights-placeholder" class="text-center py-10">
+                        <svg class="mx-auto h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                        <h3 class="mt-2 text-lg font-semibold text-slate-800">Wawasan Kosakata</h3>
+                        <p class="mt-1 text-sm text-slate-500">Dapatkan analisis mendalam tentang kosakata Anda.</p>
+                        <div class="mt-6"><button type="button" id="generate-insights-btn" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Buat Wawasan</button></div>
+                    </div>
+                    <div id="insights-content" class="hidden space-y-8">
+                        <div id="insights-loader" class="insights-loader py-10 hidden"><div class="dots-loader"><div class="dot1"></div><div class="dot2"></div><div class="dot3"></div></div><p class="mt-4 font-semibold text-sm">AI sedang menganalisis...</p></div>
+                        <section id="analysis-section"></section>
+                        <section id="learning-section"></section>
+                        <section id="exploration-section"></section>
+                    </div>
+                </div>
+            </div>
+            <div id="results-footer" class="flex flex-col sm:flex-row gap-3 mt-2 pb-8"></div>
+        </div>
+
+        <div id="round-recap-screen" class="app-screen hidden py-8 md:py-12">
+            <header class="text-center mb-12">
+                <h1 id="round-recap-title" class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter"></h1>
+            </header>
+            <div id="round-recap-details" class="space-y-4"></div>
+            <p id="round-recap-message" class="text-center text-slate-600 font-semibold mt-10"></p>
+            <footer class="pt-8 pb-8">
+                <button id="next-round-btn" class="w-full bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 text-lg shadow-lg"></button>
+            </footer>
+        </div>
+
+        <div id="exam-summary-screen" class="app-screen hidden py-8 md:py-12">
+            <header class="text-center mb-10">
+                <h1 class="text-3xl lg:text-4xl font-extrabold text-slate-800 tracking-tighter">Laporan Akhir Hasil Ujian</h1>
+                <p class="text-slate-500 mt-3 text-lg max-w-xl mx-auto">Berikut adalah rekapitulasi performa Anda selama ujian.</p>
+            </header>
+            <div id="final-result-display" class="text-center mb-12"></div>
+            <div id="final-score-chart-container" class="mb-12"></div>
+            <div id="exam-summary-details" class="space-y-6"></div>
+            <footer class="pt-10 pb-8">
+                <button id="back-to-menu-from-summary" class="w-full bg-blue-600 text-white font-bold py-3.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 text-lg shadow-lg">Kembali ke Menu Utama</button>
+            </footer>
+        </div>
+
+    </div>
+
+<script type="module">
+    // --- Elemen DOM ---
+    const screens = { 
+        mainMenu: document.getElementById('main-menu-screen'),
+        stageIntro: document.getElementById('stage-intro-screen'),
+        practice: document.getElementById('practice-screen'), 
+        results: document.getElementById('results-screen'),
+        roundRecap: document.getElementById('round-recap-screen'),
+        examSummary: document.getElementById('exam-summary-screen')
+    };
+    const loader = { container: document.getElementById('loader-container'), element: document.getElementById('main-loader'), text: document.getElementById('loader-text') };
+    const modal = {
+        overlay: document.getElementById('confirmation-modal'),
+        title: document.getElementById('modal-title'),
+        message: document.getElementById('modal-message'),
+        confirmBtn: document.getElementById('modal-confirm-btn'),
+        cancelBtn: document.getElementById('modal-cancel-btn')
+    };
+    const mainMenuElements = {
+        subtitle: document.getElementById('main-menu-subtitle'),
+        modeToggle: document.getElementById('mode-toggle'),
+        freePracticeSettings: document.getElementById('free-practice-settings'),
+        mainStartBtn: document.getElementById('main-start-btn')
+    };
+    const settings = { 
+        directionBtn: document.getElementById('direction-toggle-btn'),
+        langFrom: document.getElementById('lang-from'),
+        langTo: document.getElementById('lang-to'),
+        directionIcon: document.getElementById('direction-icon'),
+        paragraphsToggle: document.getElementById('paragraphs-toggle'), 
+        topicInput: document.getElementById('topic-input'),
+        domainInput: document.getElementById('domain-input'),
+        styleInput: document.getElementById('style-input'),
+        length: { prev: document.getElementById('length-prev'), next: document.getElementById('length-next'), value: document.getElementById('length-value') }, 
+        level: { prev: document.getElementById('level-prev'), next: document.getElementById('level-next'), value: document.getElementById('level-value'), label: document.getElementById('level-label') }, 
+        duration: { slider: document.getElementById('duration'), label: document.getElementById('duration-label'), tooltip: document.getElementById('duration-tooltip'), fill: document.getElementById('duration-fill') }
+    };
+    const stageIntroElements = {
+        title: document.getElementById('stage-intro-title'),
+        subtitle: document.getElementById('stage-intro-subtitle'),
+        settingsDisplay: document.getElementById('stage-settings-display'),
+        domainSelection: document.getElementById('stage-domain-selection'),
+        domainError: document.getElementById('domain-error'),
+        startBtn: document.getElementById('start-stage-btn')
+    };
+    const practiceElements = { timer: document.getElementById('timer-display'), timerLabel: document.getElementById('timer-label'), headerTitle: document.getElementById('practice-header-title'), infoDisplay: document.getElementById('practice-info-display'), instructionText: document.getElementById('instruction-text'), sourceText: document.getElementById('source-text'), translationInput: document.getElementById('translation-input'), highlighter: document.querySelector('.highlighter'), statusMessage: document.getElementById('status-message') };
+    const resultsElements = { 
+        mainScoreSection: document.getElementById('main-score-section'), 
+        footer: document.getElementById('results-footer'),
+        aspectView: document.getElementById('aspect-view'), 
+        comparisonView: document.getElementById('comparison-view'), 
+        textComparisonContainer: document.getElementById('text-comparison-container'),
+        insightsView: document.getElementById('insights-view'),
+        insightsPlaceholder: document.getElementById('insights-placeholder'),
+        insightsContent: document.getElementById('insights-content'),
+        insightsLoader: document.getElementById('insights-loader'),
+        analysisSection: document.getElementById('analysis-section'),
+        learningSection: document.getElementById('learning-section'),
+        explorationSection: document.getElementById('exploration-section'),
+        compareOriginal: document.getElementById('compare-original'), 
+        compareUser: document.getElementById('compare-user'), 
+        compareAi: document.getElementById('compare-ai'), 
+        compareOriginalTitle: document.getElementById('compare-original-title'), 
+        compareUserTitle: document.getElementById('compare-user-title'), 
+        compareAiTitle: document.getElementById('compare-ai-title'), 
+        aiTranslationCounter: document.getElementById('ai-translation-counter') 
+    };
+    const roundRecapElements = {
+        title: document.getElementById('round-recap-title'),
+        details: document.getElementById('round-recap-details'),
+        message: document.getElementById('round-recap-message'),
+        nextBtn: document.getElementById('next-round-btn')
+    };
+     const examSummaryElements = {
+        finalResultDisplay: document.getElementById('final-result-display'),
+        chartContainer: document.getElementById('final-score-chart-container'),
+        details: document.getElementById('exam-summary-details')
+    };
+    const buttons = { 
+        mainStart: document.getElementById('main-start-btn'),
+        headerSubmit: document.getElementById('header-submit-btn'), 
+        aspectView: document.getElementById('btn-aspect-view'), 
+        comparisonView: document.getElementById('btn-comparison-view'), 
+        insightsView: document.getElementById('btn-insights-view'),
+        generateInsights: document.getElementById('generate-insights-btn'),
+        backToMenuStage: document.getElementById('back-to-menu-from-stage'),
+        backToMenuSummary: document.getElementById('back-to-menu-from-summary'),
+        backPractice: document.getElementById('back-btn'), 
+        prevAi: document.getElementById('prev-ai-btn'), 
+        nextAi: document.getElementById('next-ai-btn'),
+        nextRound: document.getElementById('next-round-btn')
+    };
+
+    // --- State & Config ---
+    let appState = {
+        currentMode: 'free',
+        originalSourceText: '',
+        userTranslationText: '',
+        originalHighlightedHTML: '',
+        userHighlightedHTML: '',
+        isOriginalHighlighted: false,
+        isUserHighlighted: false,
+        timerInterval: null,
+        statusMessageTimeout: null,
+        sortedAiTranslations: [],
+        currentAiTranslationIndex: 0,
+        previousFinalScore: null,
+        exam: null,
+        onConfirmAction: null,
+        audioContextStarted: false,
+        loadingSound: null
+    };
+    
+    // --- AI Model Configuration ---
+    const API_KEY = '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';
+    const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+    const QWEN_MODEL = 'qwen/qwen3-32b';
+    const OPENAI_MODEL = 'openai/gpt-oss-120b';
+
+    const ICONS = { CHEVRON: `<svg class="chevron-icon text-slate-400" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>` };
+    const configOptions = { 
+        length: { options: ['very short', 'short', 'medium', 'long'], display: ['Sangat Pendek', 'Pendek', 'Sedang', 'Panjang'], current: 1 }, 
+        level: { options: ['Beginner (A1)', 'Elementary (A2)', 'Intermediate (B1)', 'Upper-Intermediate (B2)', 'Advanced (C1)', 'Advanced Plus (C1+)', 'Professional/Fluent (C2)'], display: ['Pemula', 'Dasar', 'Menengah', 'Menengah Atas', 'Mahir', 'Mahir Lanjutan', 'Profesional'], current: 0 }, 
+        paragraphs: { current: 1 }, 
+        direction: 'en-id' 
+    };
+    const examRoundsConfig = [
+        { name: "Putaran Awal", level: "Menengah Atas", duration: 300, paragraphs: 2, length: 'sedang', passingScore: 90, penalty: 0 },
+        { name: "Remedial 1", level: "Menengah", duration: 600, paragraphs: 2, length: 'sedang', passingScore: 80, penalty: 10 },
+        { name: "Remedial 2", level: "Dasar", duration: 300, paragraphs: 1, length: 'sedang', passingScore: 80, penalty: 20 },
+        { name: "Remedial Akhir", level: "Pemula", duration: 0, paragraphs: 1, length: 'sedang', passingScore: 0, penalty: 30 }
+    ];
+    const examStageTopics = [
+        { type: "Informal", domains: ["Kehidupan Sehari-hari", "Hobi & Hiburan", "Hubungan Sosial", "Makanan & Minuman", "Perjalanan Santai", "Media Sosial", "Mode & Gaya", "Musik & Film", "Olahraga & Kebugaran", "Teknologi Konsumen", "Pendidikan Santai", "Pekerjaan Paruh Waktu", "Hewan Peliharaan", "Belanja Online", "Kesehatan & Kesejahteraan", "Acara Keluarga", "Permainan Video", "Transportasi Lokal", "Cuaca", "Gosip Selebriti"] },
+        { type: "Deskriptif", domains: ["Geografi & Tempat", "Objek & Benda", "Proses & Prosedur", "Biografi Orang", "Arsitektur & Bangunan", "Seni & Lukisan", "Alam & Lingkungan", "Makanan & Kuliner", "Pakaian & Kostum", "Kendaraan & Mesin", "Anatomi & Biologi", "Acara & Festival", "Produk & Spesifikasi", "Kondisi Medis", "Eksperimen Ilmiah", "Struktur Organisasi", "Situs Sejarah", "Instrumen Musik", "Perangkat Lunak Komputer", "Fenomena Alam"] },
+        { type: "Persuasif & Naratif", domains: ["Pemasaran & Iklan", "Opini & Editorial", "Cerita Fiksi", "Pidato & Orasi", "Ulasan & Kritik", "Kampanye Sosial & Politik", "Penggalangan Dana", "Memoar & Pengalaman Pribadi", "Studi Kasus Bisnis", "Travelogue (Catatan Perjalanan)", "Jurnalisme Naratif", "Surat Penjualan", "Proposal Proyek", "Debat & Argumentasi", "Biografi Inspiratif", "Legenda & Mitos", "Naskah Drama/Film", "Blog Motivasi", "Khotbah & Ceramah", "Advokasi Hukum"] },
+        { type: "Formal & Terstruktur", domains: ["Komunikasi Bisnis", "Administrasi Publik", "Hukum & Kontrak", "Laporan Resmi", "Dokumentasi Teknis", "Prosedur Standar Operasi (SOP)", "Surat Menyurat Resmi", "Notulensi Rapat", "Rilis Pers", "Kebijakan Perusahaan", "Formulir & Aplikasi", "Manual Pengguna", "Peraturan & Regulasi", "Spesifikasi Tender", "Perjanjian Kerjasama", "Laporan Keuangan", "Sertifikat & Akreditasi", "Dokumen Akademik (Non-riset)", "Korespondensi Diplomatik", "Pemberitahuan Publik"] },
+        { type: "Akademik", domains: ["Ilmu Sosial & Humaniora", "Sains & Teknologi", "Kedokteran & Kesehatan", "Ekonomi & Bisnis", "Ilmu Komputer & IT", "Teknik & Rekayasa", "Psikologi & Perilaku", "Pendidikan & Pedagogi", "Sejarah & Arkeologi", "Filsafat & Etika", "Linguistik & Bahasa", "Seni & Sejarah Seni", "Ilmu Politik & Pemerintahan", "Studi Lingkungan", "Matematika & Statistik", "Fisika & Astronomi", "Kimia & Biokimia", "Antropologi & Sosiologi", "Studi Media & Komunikasi", "Hukum & Kriminologi"] }
+    ];
+
+    // --- Audio FX Redesign ---
+    const audioFX = {
+        _init: async function() {
+            if (!appState.audioContextStarted && Tone.context.state !== 'running') {
+                await Tone.start();
+                console.log('Audio Context dimulai!');
+                appState.audioContextStarted = true;
+            }
+        },
+        navForward: () => { const synth = new Tone.MembraneSynth({ volume: -10, pitchDecay: 0.01, octaves: 4, envelope: { attack: 0.001, decay: 0.2, sustain: 0 } }).toDestination(); synth.triggerAttackRelease('C2', '8n'); },
+        navSelect: () => { const synth = new Tone.Synth({ volume: -20, oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 } }).toDestination(); synth.triggerAttackRelease('A4', '64n'); },
+        navBack: () => { const synth = new Tone.Synth({ volume: -15, oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.2 } }).toDestination(); const now = Tone.now(); synth.triggerAttackRelease('A3', '16n', now); synth.triggerAttackRelease('F#3', '16n', now + 0.08); },
+        navSwitch: () => { const noise = new Tone.NoiseSynth({ noise: { type: 'pink' }, volume: -22, envelope: { attack: 0.001, decay: 0.05, sustain: 0 } }).toDestination(); noise.triggerAttackRelease('32n'); },
+        scoreHigh: () => { const reverb = new Tone.Reverb(0.6).toDestination(); const synth = new Tone.PolySynth(Tone.Synth, { volume: -12, oscillator: { type: 'fatsawtooth', count: 3, spread: 40 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.3, release: 0.5 } }).connect(reverb); synth.triggerAttackRelease(['C4', 'E4', 'G4', 'C5'], '8n', Tone.now()); },
+        scoreMid: () => { const synth = new Tone.PolySynth(Tone.Synth, { volume: -14, oscillator: { type: 'sine' }, envelope: { attack: 0.1, decay: 0.3, sustain: 0.4, release: 0.8 } }).toDestination(); synth.triggerAttackRelease(['C4', 'G4', 'C5'], '2n'); },
+        scoreLow: () => { const synth = new Tone.PolySynth(Tone.Synth, { volume: -16, oscillator: { type: 'square', detune: 6 }, envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.3 } }).toDestination(); synth.triggerAttackRelease(['A3', 'A#3'], '8n'); },
+        error: () => { const synth = new Tone.NoiseSynth({ volume: -18, noise: { type: 'brown' }, envelope: { attack: 0.005, decay: 0.15, sustain: 0 } }).toDestination(); synth.triggerAttackRelease('8n'); },
+        notification: () => { const delay = new Tone.PingPongDelay("8n", 0.3).toDestination(); const synth = new Tone.FMSynth({ volume: -10, harmonicity: 2, modulationIndex: 3, envelope: { attack: 0.01, decay: 0.3 }, modulationEnvelope: { attack: 0.01, decay: 0.2 } }).connect(delay); synth.triggerAttackRelease('A5', '16n'); },
+        startLoading: () => { if (appState.loadingSound) return; const filter = new Tone.AutoFilter("8n").toDestination().start(); const synth = new Tone.Synth({ volume: -25, oscillator: { type: 'pulse' }, envelope: { attack: 0.1, decay: 0.2, sustain: 1, release: 0.5 } }).connect(filter); appState.loadingSound = { synth, filter }; synth.triggerAttack('C3'); },
+        stopLoading: () => { if (appState.loadingSound) { appState.loadingSound.synth.triggerRelease(); appState.loadingSound.filter.stop().dispose(); appState.loadingSound = null; } }
+    };
+
+    // --- Fungsi Pembantu ---
+    const fetchAI = async (model, prompt, expectJson = false) => {
+        let payload;
+        if (model === OPENAI_MODEL) {
+            payload = {
+                messages: [{ role: "user", content: prompt }],
+                model: model,
+                temperature: 1,
+                max_tokens: 8192,
+                top_p: 1,
+                stream: false,
+            };
+        } else { // Default to QWEN model
+            payload = {
+                messages: [{ role: "user", content: prompt }],
+                model: model,
+                temperature: 0.6,
+                max_completion_tokens: 4096,
+                top_p: 0.95,
+                stream: false,
+            };
+        }
+        
+        if (expectJson) {
+            payload.response_format = { type: "json_object" };
+        }
+
+        let delay = 1000;
+        for (let i = 0; i < 5; i++) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const content = result.choices?.[0]?.message?.content;
+                    if (!content) {
+                        console.error("Invalid response structure:", result);
+                        throw new Error("Invalid response structure from API.");
+                    }
+                    if (expectJson) {
+                        try {
+                            const cleanedContent = content.replace(/^```json\s*|```\s*$/g, '').trim();
+                            return JSON.parse(cleanedContent);
+                        } catch (e) {
+                            console.error("Failed to parse JSON from AI response:", e);
+                            console.error("Raw content received:", content);
+                            throw new Error("AI did not return valid JSON.");
+                        }
+                    }
+                    return content;
+                }
+
+                if (response.status >= 500) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                    continue;
+                }
+                
+                const errorBody = await response.text();
+                console.error("API Error Body:", errorBody);
+                throw new Error(`API request failed with status: ${response.status}`);
+
+            } catch (error) {
+                console.error(`Attempt ${i + 1} failed:`, error);
+                if (i === 4) throw error;
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+        }
+    };
+    const getScoreAttributes = (score) => {
+        if (score >= 90) return { text: 'text-blue-600', stroke: 'stroke-blue-500', bg: 'bg-blue-500', title: 'Luar Biasa' };
+        if (score >= 80) return { text: 'text-green-600', stroke: 'stroke-green-500', bg: 'bg-green-500', title: 'Sangat Baik' };
+        if (score >= 70) return { text: 'text-lime-600', stroke: 'stroke-lime-500', bg: 'bg-lime-500', title: 'Baik' };
+        if (score >= 50) return { text: 'text-yellow-600', stroke: 'stroke-yellow-500', bg: 'bg-yellow-500', title: 'Cukup' };
+        if (score >= 30) return { text: 'text-orange-600', stroke: 'stroke-orange-500', bg: 'bg-orange-500', title: 'Buruk' };
+        return { text: 'text-red-600', stroke: 'stroke-red-500', bg: 'bg-red-500', title: 'Sangat Buruk' };
+    };
+    const getGradeFromScore = (score) => {
+        if (score >= 95) return 'A+';
+        if (score >= 90) return 'A';
+        if (score >= 85) return 'B+';
+        if (score >= 80) return 'B';
+        if (score >= 75) return 'C+';
+        if (score >= 70) return 'C';
+        return 'Tidak Lulus';
+    };
+    const showScreen = (screenName) => { Object.values(screens).forEach(screen => screen.classList.add('hidden')); screens[screenName].style.opacity = 0; screens[screenName].classList.remove('hidden'); setTimeout(() => screens[screenName].style.opacity = 1, 50); };
+    const showLoader = (visible, text = "Memuat...", type = 'analysis') => { 
+        if(visible) { audioFX.startLoading(); } else { audioFX.stopLoading(); }
+        loader.text.textContent = text; loader.element.className = 'loader'; loader.element.classList.add(type); loader.container.classList.toggle('visible', visible); 
+    };
+    const autoResizeTextarea = () => { const textarea = practiceElements.translationInput; textarea.style.height = 'auto'; textarea.style.height = `${textarea.scrollHeight}px`; practiceElements.highlighter.style.height = `${textarea.scrollHeight}px`; };
+    const updateHighlighter = (text, errors) => { let content = text.replace(/\n/g, '<br>'); if (errors && errors.length > 0) { const escapedErrors = errors.map(e => e.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')); const regex = new RegExp(`\\b(${escapedErrors.join('|')})\\b`, 'gi'); content = content.replace(regex, `<mark class="typo">$1</mark>`); } practiceElements.highlighter.innerHTML = content; };
+    const showStatusMessage = (message, type) => { const statusEl = practiceElements.statusMessage; if (appState.statusMessageTimeout) clearTimeout(appState.statusMessageTimeout); statusEl.textContent = message; statusEl.classList.remove(...statusEl.classList); statusEl.classList.add('text-sm', 'mb-1', 'text-center', 'transition-all', 'duration-300', 'h-6'); if (type) { type.split(' ').forEach(cls => statusEl.classList.add(cls)); } else { statusEl.classList.add('text-slate-500'); } statusEl.classList.add('opacity-100'); if (message) { appState.statusMessageTimeout = setTimeout(() => { statusEl.classList.remove('opacity-100'); }, 4000); } else { statusEl.classList.remove('opacity-100'); } };
+    const calculateJaccardSimilarity = (text1, text2) => { const set1 = new Set(text1.toLowerCase().split(/\s+/)); const set2 = new Set(text2.toLowerCase().split(/\s+/)); const intersection = new Set([...set1].filter(x => set2.has(x))); const union = new Set([...set1, ...set2]); return intersection.size / union.size; };
+    const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
+    const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
+    const showConfirmationModal = (message, onConfirm, title = "Konfirmasi") => {
+        modal.message.textContent = message;
+        modal.title.textContent = title;
+        appState.onConfirmAction = onConfirm;
+        modal.overlay.classList.add('visible');
+    };
+
+    // --- UI Update Functions ---
+    const updateSelectorUI = (key) => { const config = configOptions[key]; settings[key].value.textContent = config.display[config.current]; settings[key].prev.disabled = config.current === 0; settings[key].next.disabled = config.current === config.options.length - 1; };
+    const updateSegmentedControl = (toggleElement, selectedValue) => { const glider = toggleElement.querySelector('.glider'); const options = Array.from(toggleElement.querySelectorAll('.option')); const selectedIndex = options.findIndex(opt => opt.dataset.value === selectedValue.toString()); if (selectedIndex !== -1 && options[0]) { const optionWidth = options[0].offsetWidth; glider.style.transform = `translateX(${selectedIndex * optionWidth}px)`; options.forEach((opt, index) => { opt.style.color = index === selectedIndex ? '#1e293b' : '#475569'; }); } };
+    const updateAiTranslationView = () => { if (appState.sortedAiTranslations.length === 0) return; resultsElements.compareAi.textContent = appState.sortedAiTranslations[appState.currentAiTranslationIndex].text; resultsElements.aiTranslationCounter.textContent = `${appState.currentAiTranslationIndex + 1} / 3`; buttons.prevAi.disabled = appState.currentAiTranslationIndex === 0; buttons.nextAi.disabled = appState.currentAiTranslationIndex === appState.sortedAiTranslations.length - 1; };
+    const updateDurationSlider = () => { const slider = settings.duration.slider; const tooltip = settings.duration.tooltip; const fill = settings.duration.fill; const value = parseInt(slider.value); const min = parseInt(slider.min); const max = parseInt(slider.max); if (value === 0) { settings.duration.label.textContent = 'Tak Terbatas'; tooltip.textContent = 'Tak Terbatas'; } else { const minutes = Math.floor(value / 60); const seconds = value % 60; const timeString = `${minutes}m ${seconds.toString().padStart(2, '0')}d`; settings.duration.label.textContent = timeString; tooltip.textContent = timeString; } const percent = ((value - min) / (max - min)) * 100; fill.style.width = `${percent}%`; const thumbWidth = 20; const trackWidth = slider.offsetWidth; const thumbPosition = (percent / 100) * (trackWidth - thumbWidth) + (thumbWidth / 2); tooltip.style.left = `${thumbPosition}px`; };
+
+    // --- Event Listeners ---
+    mainMenuElements.modeToggle.addEventListener('click', (e) => {
+        const targetOption = e.target.closest('.option');
+        if (!targetOption) return;
+        audioFX.navSelect();
+        const selectedMode = targetOption.dataset.value;
+        appState.currentMode = selectedMode;
+        updateSegmentedControl(mainMenuElements.modeToggle, selectedMode);
+        
+        const settingsDiv = mainMenuElements.freePracticeSettings;
+        if (selectedMode === 'exam') {
+            mainMenuElements.subtitle.textContent = "Uji kemampuan Anda melalui 5 tahap dengan tingkat kesulitan yang meningkat.";
+            buttons.mainStart.textContent = "Mulai Ujian";
+            settingsDiv.style.maxHeight = '0px';
+            settingsDiv.style.opacity = '0';
+        } else {
+            mainMenuElements.subtitle.textContent = "Atur sendiri tingkat kesulitan, durasi, dan topik latihan Anda.";
+            buttons.mainStart.textContent = "Mulai Latihan";
+            settingsDiv.style.maxHeight = settingsDiv.scrollHeight + "px";
+            settingsDiv.style.opacity = '1';
+        }
+    });
+
+    buttons.mainStart.addEventListener('click', () => {
+        audioFX._init();
+        audioFX.navForward();
+        if (appState.currentMode === 'free') {
+            handleStartFreePractice();
+        } else {
+            initExamMode();
+        }
+    });
+
+    modal.cancelBtn.addEventListener('click', () => { audioFX.navBack(); modal.overlay.classList.remove('visible'); });
+    modal.confirmBtn.addEventListener('click', () => {
+        audioFX.navForward();
+        modal.overlay.classList.remove('visible');
+        if (appState.onConfirmAction) {
+            appState.onConfirmAction();
+            appState.onConfirmAction = null;
+        }
+    });
+
+    settings.directionBtn.addEventListener('click', () => { audioFX.navSelect(); configOptions.direction = configOptions.direction === 'en-id' ? 'id-en' : 'en-id'; const isEnId = configOptions.direction === 'en-id'; settings.langFrom.textContent = isEnId ? 'EN' : 'ID'; settings.langTo.textContent = isEnId ? 'ID' : 'EN'; settings.directionIcon.classList.toggle('rotate-180'); settings.level.label.textContent = `Tingkat Bahasa ${isEnId ? 'Inggris' : 'Indonesia'}`; });
+    settings.paragraphsToggle.addEventListener('click', (e) => { const targetOption = e.target.closest('.option'); if (!targetOption) return; audioFX.navSelect(); configOptions.paragraphs.current = parseInt(targetOption.dataset.value, 10); updateSegmentedControl(settings.paragraphsToggle, configOptions.paragraphs.current); });
+    const createSelectorHandler = (key, direction) => () => { audioFX.navSelect(); const config = configOptions[key]; const newIndex = config.current + direction; if (newIndex >= 0 && newIndex < config.options.length) { config.current = newIndex; updateSelectorUI(key); } };
+    settings.length.prev.addEventListener('click', createSelectorHandler('length', -1));
+    settings.length.next.addEventListener('click', createSelectorHandler('length', 1));
+    settings.level.prev.addEventListener('click', createSelectorHandler('level', -1));
+    settings.level.next.addEventListener('click', createSelectorHandler('level', 1));
+    practiceElements.translationInput.addEventListener('input', () => { autoResizeTextarea(); updateHighlighter(practiceElements.translationInput.value, []); showStatusMessage('', ''); });
+    practiceElements.translationInput.addEventListener('scroll', () => { practiceElements.highlighter.scrollTop = practiceElements.translationInput.scrollTop; });
+    stageIntroElements.startBtn.addEventListener('click', () => { audioFX.navForward(); handleStartStagePractice(); });
+    buttons.headerSubmit.addEventListener('click', () => { audioFX.navSelect(); showConfirmationModal("Apakah Anda yakin ingin menyelesaikan tahap ini? Jawaban tidak dapat diubah.", () => handleSubmit()); });
+    buttons.backToMenuStage.addEventListener('click', () => { audioFX.navBack(); showConfirmationModal("Kembali ke menu utama akan mengakhiri ujian. Apakah Anda yakin?", () => handleReset()); });
+    buttons.backToMenuSummary.addEventListener('click', () => { audioFX.navForward(); handleReset(); });
+    buttons.nextRound.addEventListener('click', () => { audioFX.navForward(); handleNextRound(); });
+    buttons.backPractice.addEventListener('click', () => {
+        audioFX.navBack();
+        const message = appState.currentMode === 'exam' 
+            ? "Keluar dari tahap ini akan mengakhiri seluruh sesi ujian. Apakah Anda yakin?" 
+            : "Apakah Anda yakin ingin keluar? Progress latihan ini akan hilang.";
+        showConfirmationModal(message, () => handleReset());
+    });
+    buttons.aspectView.addEventListener('click', () => { audioFX.navSwitch(); switchView('aspect'); });
+    buttons.comparisonView.addEventListener('click', () => { audioFX.navSwitch(); switchView('comparison'); });
+    buttons.insightsView.addEventListener('click', () => { audioFX.navSwitch(); switchView('insights'); });
+    buttons.generateInsights.addEventListener('click', () => { audioFX.navForward(); handleGenerateInsights(); });
+    buttons.prevAi.addEventListener('click', () => { audioFX.navSelect(); if (appState.currentAiTranslationIndex > 0) { appState.currentAiTranslationIndex--; updateAiTranslationView(); } });
+    buttons.nextAi.addEventListener('click', () => { audioFX.navSelect(); if (appState.currentAiTranslationIndex < appState.sortedAiTranslations.length - 1) { appState.currentAiTranslationIndex++; updateAiTranslationView(); } });
+    resultsElements.aspectView.addEventListener('click', (e) => { const header = e.target.closest('.aspect-header'); if (header) { audioFX.navSelect(); const parentSection = header.closest('section'); if (parentSection) { const details = parentSection.querySelector('.focus-details'); if (details) { header.classList.toggle('expanded'); details.classList.toggle('expanded'); } } } });
+    stageIntroElements.domainSelection.addEventListener('click', e => {
+        const card = e.target.closest('.domain-card');
+        if (card) {
+            audioFX.navSelect();
+            document.querySelectorAll('.domain-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            appState.exam.selectedDomain = card.dataset.domain;
+            stageIntroElements.domainError.classList.add('hidden');
+        }
+    });
+    resultsElements.comparisonView.addEventListener('click', (e) => {
+        const reorderBtn = e.target.closest('.reorder-btn');
+        const highlightBtn = e.target.closest('.highlight-trigger-btn');
+        if (reorderBtn) {
+            audioFX.navSelect();
+            const section = reorderBtn.closest('section');
+            const direction = reorderBtn.dataset.direction;
+            reorderTextSections(section, direction);
+        }
+        if (highlightBtn) {
+            audioFX.navSelect();
+            handleManualHighlight(highlightBtn);
+        }
+    });
+
+    // --- Logika Utama Aplikasi ---
+    function setupPracticeScreen(text, duration, title, examInfo = null) {
+        appState.originalSourceText = text;
+        
+        if (examInfo) {
+            practiceElements.headerTitle.textContent = "";
+            practiceElements.infoDisplay.innerHTML = `
+                <p><span class="font-semibold text-slate-600">Putaran:</span> <span class="text-slate-800 font-bold">${examInfo.roundName}</span></p>
+                <p><span class="font-semibold text-slate-600">Stage ${examInfo.stageIndex}:</span> <span class="text-slate-800 font-bold">${examInfo.stageType}</span></p>
+                <p><span class="font-semibold text-slate-600">Domain:</span> <span class="text-slate-800 font-bold">${examInfo.domain}</span></p>
+                <p><span class="font-semibold text-slate-600">Topik:</span> <span class="text-slate-800 font-bold">${examInfo.topic}</span></p>
+            `;
+            practiceElements.infoDisplay.classList.remove('hidden');
+        } else {
+            practiceElements.headerTitle.textContent = title;
+            practiceElements.infoDisplay.classList.add('hidden');
+        }
+
+        const isEnId = configOptions.direction === 'en-id';
+        practiceElements.instructionText.textContent = isEnId ? 'Terjemahkan teks Bahasa Inggris berikut ke Bahasa Indonesia:' : 'Terjemahkan teks Bahasa Indonesia berikut ke Bahasa Inggris:';
+        practiceElements.sourceText.innerHTML = '';
+        appState.originalSourceText.split('\n').filter(p => p.trim()).forEach(p => {
+            const pElement = document.createElement('p');
+            pElement.textContent = p;
+            practiceElements.sourceText.appendChild(pElement);
+        });
+        practiceElements.translationInput.value = '';
+        updateHighlighter('', []);
+        autoResizeTextarea();
+        showStatusMessage('', '');
+        showScreen('practice');
+        if (duration > 0) {
+            practiceElements.timer.classList.remove('hidden');
+            practiceElements.timer.classList.add('flex');
+            startTimer(duration);
+        } else {
+            practiceElements.timer.classList.add('hidden');
+            practiceElements.timer.classList.remove('flex');
+        }
+    }
+    
+    async function generatePracticeText(prompt, isExam = false) {
+        showLoader(true, "Mempersiapkan latihan...", 'analysis');
+        try {
+            let rawText = await fetchAI(QWEN_MODEL, prompt);
+            if (!rawText) throw new Error("Invalid response from AI.");
+
+            rawText = rawText
+                .replace(/<think>[\s\S]*?<\/think>/g, '')
+                .replace(/^```[a-zA-Z]*\n?/g, '')
+                .replace(/```$/g, '')
+                .trim();
+
+            if (isExam) {
+                const lines = rawText.split('\n');
+                let topic = "Topik Umum";
+                let text = rawText;
+
+                const topicIndex = lines.findIndex(line => line.startsWith("TOPIK: "));
+                if (topicIndex !== -1) {
+                    topic = lines[topicIndex].substring(7).trim();
+                    text = lines.slice(topicIndex + 1).join('\n').trim();
+                }
+                return { topic, text };
+            } else {
+                return { topic: null, text: rawText };
+            }
+        } catch (error) {
+            console.error("Gagal membuat teks latihan:", error);
+            audioFX.error();
+            showScreen('mainMenu'); 
+            return null;
+        } finally {
+            showLoader(false);
+        }
+    }
+
+    async function handleStartFreePractice() { 
+        const prompt = getExercisePrompt();
+        const { text } = await generatePracticeText(prompt, false);
+        if (text) {
+            const duration = parseInt(settings.duration.slider.value);
+            setupPracticeScreen(text, duration, "Latihan Bebas", null);
+        }
+    }
+
+    async function handleSubmit() { 
+        if (appState.timerInterval) clearInterval(appState.timerInterval); 
+        const currentTranslation = practiceElements.translationInput.value.trim(); 
+        if (!currentTranslation) { 
+            audioFX.error(); 
+            showStatusMessage("Silakan isi terjemahan Anda terlebih dahulu.", "text-yellow-800"); 
+            return; 
+        } 
+        await performFullEvaluation(currentTranslation); 
+    }
+    
+    async function performFullEvaluation(translationToEvaluate) { 
+        if (appState.timerInterval) clearInterval(appState.timerInterval); 
+        appState.userTranslationText = translationToEvaluate; 
+        showLoader(true, "AI sedang menganalisis...", 'analysis'); 
+        updateHighlighter(appState.userTranslationText, []); 
+        try { 
+            const evaluationData = await fetchAI(QWEN_MODEL, getEvaluationPrompt(appState.originalSourceText, appState.userTranslationText), true);
+            await displayResults(evaluationData); 
+            showScreen('results'); 
+            switchView('aspect'); 
+        } catch (error) { 
+            audioFX.error();
+            console.error("Gagal mengevaluasi terjemahan:", error); 
+            showScreen('results'); 
+            resultsElements.mainScoreSection.innerHTML = `<p class="text-red-600">Maaf, terjadi kesalahan saat mengevaluasi jawaban Anda. Silakan coba lagi.</p>`; 
+        } finally { 
+            showLoader(false); 
+        } 
+    }
+    
+    function handleReset() { 
+        showScreen('mainMenu');
+        if (appState.timerInterval) clearInterval(appState.timerInterval); 
+        appState = {
+            ...appState,
+            currentMode: 'free', originalSourceText: '', userTranslationText: '',
+            originalHighlightedHTML: '', userHighlightedHTML: '',
+            isOriginalHighlighted: false, isUserHighlighted: false,
+            timerInterval: null, statusMessageTimeout: null, sortedAiTranslations: [],
+            currentAiTranslationIndex: 0, 
+            previousFinalScore: null, exam: null, onConfirmAction: null
+        };
+        resultsElements.mainScoreSection.innerHTML = ''; 
+        resultsElements.aspectView.innerHTML = ''; 
+        resultsElements.insightsPlaceholder.classList.remove('hidden'); 
+        resultsElements.insightsContent.classList.add('hidden');
+        initializeAppUI();
+    }
+    
+    function switchView(viewName) { 
+        const views = { aspect: resultsElements.aspectView, comparison: resultsElements.comparisonView, insights: resultsElements.insightsView };
+        const viewButtons = { aspect: buttons.aspectView, comparison: buttons.comparisonView, insights: buttons.insightsView };
+        Object.values(views).forEach(v => v.classList.add('hidden'));
+        Object.values(viewButtons).forEach(b => b.classList.remove('bg-white', 'text-slate-800', 'shadow-sm'));
+        views[viewName].classList.remove('hidden');
+        viewButtons[viewName].classList.add('bg-white', 'text-slate-800', 'shadow-sm');
+    }
+
+    async function displayResults(data) {
+        appState.originalHighlightedHTML = '';
+        appState.userHighlightedHTML = '';
+        appState.isOriginalHighlighted = false;
+        appState.isUserHighlighted = false;
+        appState.currentAiTranslationIndex = 0;
+
+        document.querySelectorAll('.highlight-trigger-btn').forEach(btn => {
+            btn.classList.remove('loading');
+            btn.querySelector('.btn-text').textContent = 'Sorot Kesalahan';
+            btn.disabled = false;
+        });
+
+        appState.sortedAiTranslations = data.terjemahan_alternatif
+            .map(text => ({ text: text, score: calculateJaccardSimilarity(appState.userTranslationText, text) }))
+            .sort((a, b) => b.score - a.score);
+
+        const { akurasi, kelancaran, gaya, teknis } = data.rincian_penilaian;
+        const skor_akurasi = (akurasi.ketepatan_makna * 0.4) + (akurasi.ketepatan_informasi * 0.25) + (akurasi.kesesuaian_istilah * 0.15) + (akurasi.implikatur_dan_inferensi * 0.1) + (akurasi.kejelasan_dan_bebas_ambiguitas * 0.1);
+        const skor_kelancaran = (kelancaran.tata_bahasa * 0.25) + (kelancaran.struktur_kalimat * 0.25) + (kelancaran.diksi * 0.25) + (kelancaran.koherensi_dan_kohesi * 0.25);
+        const skor_gaya = (gaya.tingkat_formalitas * 0.4) + (gaya.nada_dan_suasana * 0.3) + (gaya.idiom_dan_budaya * 0.3);
+        const skor_teknis = (teknis.konsistensi_istilah * 0.4) + (teknis.format_dan_tanda_baca * 0.3) + (teknis.adaptasi_teknis_dan_lokalisasi * 0.3);
+        const skor_aspek_berbobot = (skor_akurasi * 0.4) + (skor_kelancaran * 0.3) + (skor_gaya * 0.2) + (skor_teknis * 0.1);
+        const skor_kelengkapan = data.kelengkapan_teks.skor;
+        const finalScore = Math.round(skor_aspek_berbobot * (skor_kelengkapan / 100));
+        
+        if (finalScore >= 85) { audioFX.scoreHigh(); } 
+        else if (finalScore >= 50) { audioFX.scoreMid(); }
+        else { audioFX.scoreLow(); }
+
+        const finalScoreAttr = getScoreAttributes(finalScore);
+        
+        let scoreComparisonHTML = '';
+        if (appState.currentMode === 'free' && appState.previousFinalScore !== null) {
+            const diff = finalScore - appState.previousFinalScore;
+            const diffColor = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-slate-500';
+            const diffSign = diff > 0 ? '+' : '';
+            scoreComparisonHTML = `<div class="mb-4 text-sm font-semibold text-slate-500">Skor Sebelumnya: ${appState.previousFinalScore} <span class="${diffColor}">(${diffSign}${diff})</span></div>`;
+        }
+        
+        let stageResultHTML = '';
+        if (appState.currentMode === 'exam') {
+            const currentRoundConfig = examRoundsConfig[appState.exam.currentRoundIndex];
+            const status = finalScore >= currentRoundConfig.passingScore ? 'Lulus Tahap' : 'Tidak Lulus';
+            const statusColor = finalScore >= currentRoundConfig.passingScore ? 'text-green-600' : 'text-orange-600';
+            stageResultHTML = `<p class="mt-4 text-lg font-bold ${statusColor}">${status}</p>`;
+        }
+
+        resultsElements.mainScoreSection.innerHTML = `
+            ${scoreComparisonHTML}
+            <div class="circular-progress mb-4"><svg viewBox="0 0 36 36"><path class="circular-progress-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke-width="3"></path><path id="main-score-circle" class="circular-progress-bar ${finalScoreAttr.stroke}" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" stroke-width="3" stroke-dasharray="100, 100" stroke-dashoffset="100"></path></svg><div class="circular-progress-text"><span class="text-4xl font-extrabold tracking-tighter ${finalScoreAttr.text}">${finalScore}</span><span class="text-sm font-semibold text-slate-400">/100</span></div></div><p class="text-xl font-bold ${finalScoreAttr.text}">${finalScoreAttr.title}</p><p class="text-slate-600 mt-2 leading-relaxed max-w-xl mx-auto text-sm">${data.umpan_balik_akhir_ai}</p>${stageResultHTML}`;
+        setTimeout(() => { const circle = document.getElementById('main-score-circle'); if (circle) { const offset = 100 - finalScore; circle.style.strokeDashoffset = offset; } }, 100);
+
+        resultsElements.aspectView.innerHTML = '';
+        const aspects = { 
+            kelengkapan_teks: { title: "Kelengkapan Teks", skor: skor_kelengkapan, sub: data.kelengkapan_teks, feedback: data.umpan_balik_aspek.kelengkapan_teks },
+            akurasi: { title: "Akurasi (Bobot 40%)", skor: skor_akurasi, sub: data.rincian_penilaian.akurasi, feedback: data.umpan_balik_aspek.akurasi, labels: { ketepatan_makna: "Ketepatan Makna (40%)", ketepatan_informasi: "Ketepatan Informasi (25%)", kesesuaian_istilah: "Kesesuaian Istilah (15%)", implikatur_dan_inferensi: "Implikatur & Inferensi (10%)", kejelasan_dan_bebas_ambiguitas: "Kejelasan & Bebas Ambiguitas (10%)" }},
+            kelancaran: { title: "Kelancaran (Bobot 30%)", skor: skor_kelancaran, sub: data.rincian_penilaian.kelancaran, feedback: data.umpan_balik_aspek.kelancaran, labels: { tata_bahasa: "Tata Bahasa (25%)", struktur_kalimat: "Struktur Kalimat (25%)", diksi: "Diksi (25%)", koherensi_dan_kohesi: "Koherensi & Kohesi (25%)" }},
+            gaya: { title: "Gaya (Bobot 20%)", skor: skor_gaya, sub: data.rincian_penilaian.gaya, feedback: data.umpan_balik_aspek.gaya, labels: { tingkat_formalitas: "Tingkat Formalitas (40%)", nada_dan_suasana: "Nada & Suasana (30%)", idiom_dan_budaya: "Idiom & Budaya (30%)" }},
+            teknis: { title: "Teknis (Bobot 10%)", skor: skor_teknis, sub: data.rincian_penilaian.teknis, feedback: data.umpan_balik_aspek.teknis, labels: { konsistensi_istilah: "Konsistensi Istilah (40%)", format_dan_tanda_baca: "Format & Tanda Baca (30%)", adaptasi_teknis_dan_lokalisasi: "Adaptasi Teknis & Lokalisasi (30%)" }}
+        };
+        for (const aspectKey in aspects) {
+            const aspectData = aspects[aspectKey];
+            const aspectScore = Math.round(aspectData.skor);
+            const aspectAttr = getScoreAttributes(aspectScore);
+            const isExpanded = aspectKey === 'akurasi';
+            const aspectSection = document.createElement('section');
+            aspectSection.className = "py-5 border-b border-slate-200 last:border-b-0";
+            let subAspectHTML = '';
+            if(aspectData.labels) {
+                for (const subKey in aspectData.labels) { 
+                    const subScore = aspectData.sub[subKey];
+                    const subAttr = getScoreAttributes(subScore);
+                    subAspectHTML += `<div class="flex justify-between items-center mb-1.5"><span class="text-slate-600 text-sm">${aspectData.labels[subKey]}</span><span class="font-semibold text-sm ${subAttr.text}">${subScore}</span></div>${createProgressBar(subScore, subAttr.bg, true)}`;
+                }
+                aspectSection.innerHTML = `<button class="aspect-header w-full flex justify-between items-center ${isExpanded ? 'expanded' : ''}"><div class="text-left"><h3 class="text-base font-semibold text-slate-800">${aspectData.title}</h3></div><div class="flex items-center gap-3"><span class="text-xl font-bold ${aspectAttr.text}">${aspectScore}</span>${ICONS.CHEVRON}</div></button>${createProgressBar(aspectScore, aspectAttr.bg, false)}<div class="focus-details ${isExpanded ? 'expanded' : ''} border-t border-slate-200"><p class="text-slate-600 mt-0 mb-4 text-sm">${aspectData.feedback}</p><div class="space-y-3">${subAspectHTML}</div></div>`;
+            } else {
+                 aspectSection.innerHTML = `<div class="w-full flex justify-between items-center"><div class="text-left"><h3 class="text-base font-semibold text-slate-800">${aspectData.title}</h3><p class="text-xs text-slate-400 font-medium">Faktor Pengali Utama</p></div><span class="text-xl font-bold ${aspectAttr.text}">${aspectScore}</span></div>${createProgressBar(aspectScore, aspectAttr.bg, false)}<p class="text-slate-600 mt-3 text-sm">${aspectData.feedback}</p>`;
+            }
+            resultsElements.aspectView.appendChild(aspectSection);
+        }
+        setTimeout(() => { const progressBars = resultsElements.aspectView.querySelectorAll('.progress-bar-fill'); progressBars.forEach(bar => { bar.style.width = bar.dataset.score + '%'; }); }, 100);
+        
+        const isEnId = configOptions.direction === 'en-id';
+        resultsElements.compareOriginalTitle.textContent = isEnId ? "Teks Asli (Bahasa Inggris)" : "Teks Asli (Bahasa Indonesia)";
+        resultsElements.compareUserTitle.textContent = "Terjemahan Anda";
+        resultsElements.compareAiTitle.textContent = isEnId ? "Terjemahan Tepat (AI)" : "Terjemahan Tepat (AI)";
+        resultsElements.compareOriginal.innerHTML = appState.originalSourceText.replace(/\n/g, '<br>');
+        resultsElements.compareUser.innerHTML = appState.userTranslationText.replace(/\n/g, '<br>');
+        updateAiTranslationView();
+        
+        if (appState.currentMode === 'free') {
+            appState.previousFinalScore = finalScore;
+            resultsElements.footer.innerHTML = `<button id="retry-btn" class="w-full sm:w-1/2 bg-slate-100 text-slate-700 font-bold py-3 px-4 rounded-lg hover:bg-slate-200 focus:outline-none focus:ring-4 focus:ring-slate-300 transition-all">Evaluasi Ulang</button><button id="reset-btn" class="w-full sm:w-1/2 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all">Menu Utama</button>`;
+            document.getElementById('retry-btn').addEventListener('click', () => { audioFX.navSelect(); handleRetrySameExercise(); });
+            document.getElementById('reset-btn').addEventListener('click', () => { audioFX.navForward(); handleReset(); });
+        } else if (appState.currentMode === 'exam') {
+            resultsElements.footer.innerHTML = `<button id="next-stage-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all">Lanjutkan</button>`;
+            document.getElementById('next-stage-btn').addEventListener('click', () => { audioFX.navForward(); processStageResult(finalScore); });
+        }
+
+        updateReorderButtons();
+    }
+
+    async function generateHighlightHTML(prompt) {
+        try {
+            const highlightData = await fetchAI(OPENAI_MODEL, prompt, true);
+            return highlightData;
+        } catch (error) {
+            audioFX.error();
+            console.error("Gagal melakukan sorotan cerdas:", error);
+            return null;
+        }
+    }
+
+    function applyHighlights(baseText, highlightData) {
+        let generatedHTML = baseText;
+        if (highlightData && highlightData.highlights && Array.isArray(highlightData.highlights) && highlightData.highlights.length > 0) {
+            const levelToClass = {'sangat-buruk': 'highlight-sangat-buruk', 'buruk': 'highlight-buruk', 'cukup': 'highlight-cukup'};
+            highlightData.highlights.sort((a, b) => b.text.length - a.text.length);
+            highlightData.highlights.forEach(item => {
+                const escapedText = item.text.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+                const regex = new RegExp(`(^|\\s|\\p{P})(${escapedText})(?=\\s|\\p{P}|$)`, 'giu');
+                const className = levelToClass[item.level] || 'highlight-cukup';
+                generatedHTML = generatedHTML.replace(regex, `$1<mark class="${className}">$2</mark>`);
+            });
+        }
+        return generatedHTML.replace(/\n/g, '<br>');
+    }
+
+    async function handleManualHighlight(buttonEl) {
+        const target = buttonEl.dataset.target;
+        const isHighlighted = target === 'original' ? appState.isOriginalHighlighted : appState.isUserHighlighted;
+        const textElement = target === 'original' ? resultsElements.compareOriginal : resultsElements.compareUser;
+        const baseText = target === 'original' ? appState.originalSourceText : appState.userTranslationText;
+        const highlightedHTMLState = target === 'original' ? 'originalHighlightedHTML' : 'userHighlightedHTML';
+        
+        if (isHighlighted) {
+            textElement.innerHTML = baseText.replace(/\n/g, '<br>');
+            buttonEl.querySelector('.btn-text').textContent = 'Sorot Kesalahan';
+            if (target === 'original') appState.isOriginalHighlighted = false;
+            else appState.isUserHighlighted = false;
+            return;
+        }
+
+        if (appState[highlightedHTMLState]) {
+            textElement.innerHTML = appState[highlightedHTMLState];
+            buttonEl.querySelector('.btn-text').textContent = 'Sembunyikan Sorotan';
+            if (target === 'original') appState.isOriginalHighlighted = true;
+            else appState.isUserHighlighted = true;
+            return;
+        }
+        
+        buttonEl.classList.add('loading');
+        buttonEl.disabled = true;
+
+        const prompt = target === 'original' 
+            ? getOriginalHighlightPrompt(appState.originalSourceText, appState.userTranslationText, appState.sortedAiTranslations[0].text)
+            : getUserHighlightPrompt(appState.userTranslationText, appState.sortedAiTranslations[0].text);
+            
+        const highlightData = await generateHighlightHTML(prompt);
+        const generatedHTML = applyHighlights(baseText, highlightData);
+        
+        appState[highlightedHTMLState] = generatedHTML;
+        textElement.innerHTML = generatedHTML;
+        
+        buttonEl.classList.remove('loading');
+        buttonEl.disabled = false;
+        buttonEl.querySelector('.btn-text').textContent = 'Sembunyikan Sorotan';
+        if (target === 'original') appState.isOriginalHighlighted = true;
+        else appState.isUserHighlighted = true;
+    }
+
+    function reorderTextSections(section, direction) {
+        const container = resultsElements.textComparisonContainer;
+        if (direction === 'up' && section.previousElementSibling) {
+            container.insertBefore(section, section.previousElementSibling);
+        } else if (direction === 'down' && section.nextElementSibling) {
+            container.insertBefore(section.nextElementSibling, section);
+        }
+        updateReorderButtons();
+    }
+
+    function updateReorderButtons() {
+        const sections = Array.from(resultsElements.textComparisonContainer.children);
+        sections.forEach((section, index) => {
+            const upBtn = section.querySelector('.reorder-btn[data-direction="up"]');
+            const downBtn = section.querySelector('.reorder-btn[data-direction="down"]');
+            if (upBtn) upBtn.disabled = (index === 0);
+            if (downBtn) downBtn.disabled = (index === sections.length - 1);
+        });
+    }
+
+    const createProgressBar = (score, colorClass, isSubItem) => { const height = isSubItem ? 'h-1.5' : 'h-2'; const margin = isSubItem ? '' : 'mt-2'; return `<div class="w-full bg-slate-200 rounded-full ${height} ${margin}"><div class="${colorClass} ${height} rounded-full progress-bar-fill" style="width: 0%" data-score="${score}"></div></div>`; };
+    function startTimer(seconds) { let timeRemaining = seconds; const update = () => { const minutes = Math.floor(timeRemaining / 60); const secs = timeRemaining % 60; practiceElements.timerLabel.textContent = `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`; }; update(); appState.timerInterval = setInterval(() => { timeRemaining--; update(); if (timeRemaining < 0) { clearInterval(appState.timerInterval); practiceElements.timerLabel.textContent = "Waktu Habis!"; const currentTranslation = practiceElements.translationInput.value.trim(); if (!currentTranslation) { if(appState.currentMode === 'exam') { processStageResult(0); } else { handleReset(); } return; } performFullEvaluation(currentTranslation); } }, 1000); }
+    function handleRetrySameExercise() { 
+        resultsElements.insightsPlaceholder.classList.remove('hidden'); 
+        resultsElements.insightsContent.classList.add('hidden');
+        setupPracticeScreen(appState.originalSourceText, parseInt(settings.duration.slider.value), "Latihan Bebas", null); 
+    }
+
+    // --- Exam Mode Logic ---
+    function initExamMode() {
+        appState.exam = {
+            currentRoundIndex: 0,
+            stagesToAttemptInCurrentRound: [0, 1, 2, 3, 4],
+            currentStageIndexInQueue: -1,
+            stages: examStageTopics.map(stageInfo => ({
+                type: stageInfo.type,
+                domains: stageInfo.domains,
+                attempts: [],
+                highestScore: 0,
+                passedInRound: -1,
+                finalScore: 0,
+                status: 'pending' 
+            }))
+        };
+        startNextStageFromQueue();
+    }
+
+    function startNextStageFromQueue() {
+        appState.exam.currentStageIndexInQueue++;
+        if (appState.exam.currentStageIndexInQueue >= appState.exam.stagesToAttemptInCurrentRound.length) {
+            showRoundRecap();
+            return;
+        }
+        
+        audioFX.notification();
+
+        const stageIndex = appState.exam.stagesToAttemptInCurrentRound[appState.exam.currentStageIndexInQueue];
+        const stage = appState.exam.stages[stageIndex];
+        const roundConfig = examRoundsConfig[appState.exam.currentRoundIndex];
+
+        stageIntroElements.title.innerHTML = `
+            <span class="block">${roundConfig.name}</span>
+            <span class="block text-xl lg:text-2xl font-semibold text-blue-600 mt-1">Stage ${stageIndex + 1}: ${stage.type}</span>
+        `;
+        stageIntroElements.subtitle.textContent = `Anda akan diuji pada tingkat ${roundConfig.level}. Pilih sebuah domain, dan AI akan membuatkan soal dengan topik spesifik di dalamnya.`;
+        
+        const durationText = roundConfig.duration > 0 ? `${Math.floor(roundConfig.duration / 60)} Menit` : 'Tak Terbatas';
+        stageIntroElements.settingsDisplay.innerHTML = `
+            <div class="p-3"><div class="text-xs text-slate-500 uppercase tracking-wider">Tingkat</div><div class="font-bold text-slate-800 text-base">${roundConfig.level}</div></div>
+            <div class="p-3 border-x border-slate-200"><div class="text-xs text-slate-500 uppercase tracking-wider">Durasi</div><div class="font-bold text-slate-800 text-base">${durationText}</div></div>
+            <div class="p-3"><div class="text-xs text-slate-500 uppercase tracking-wider">Paragraf</div><div class="font-bold text-slate-800 text-base">${roundConfig.paragraphs}</div></div>
+        `;
+
+        const randomDomains = shuffleArray([...stage.domains]).slice(0, 4);
+        stageIntroElements.domainSelection.innerHTML = randomDomains.map(domain => `
+            <button class="domain-card text-center p-4 bg-white rounded-xl shadow-sm hover:shadow-md border-2 border-slate-200 transition-all duration-200" data-domain="${domain}">
+                <h3 class="font-bold text-slate-800">${domain}</h3>
+            </button>
+        `).join('');
+        
+        appState.exam.selectedDomain = null;
+        stageIntroElements.domainError.classList.add('hidden');
+        showScreen('stageIntro');
+    }
+
+    async function handleStartStagePractice() {
+        if (!appState.exam.selectedDomain) {
+            audioFX.error();
+            stageIntroElements.domainError.classList.remove('hidden');
+            return;
+        }
+        const roundConfig = examRoundsConfig[appState.exam.currentRoundIndex];
+        const stageIndex = appState.exam.stagesToAttemptInCurrentRound[appState.exam.currentStageIndexInQueue];
+        const stage = appState.exam.stages[stageIndex];
+
+        const promptConfig = {
+            level: roundConfig.level,
+            paragraphs: roundConfig.paragraphs,
+            length: roundConfig.length,
+            style: stage.type,
+        };
+
+        const prompt = getExercisePrompt(promptConfig, { domain: appState.exam.selectedDomain });
+        const generatedContent = await generatePracticeText(prompt, true);
+        if (generatedContent) {
+            const { topic, text } = generatedContent;
+            const examInfo = {
+                roundName: roundConfig.name,
+                stageIndex: stageIndex + 1,
+                stageType: stage.type,
+                domain: appState.exam.selectedDomain,
+                topic: topic 
+            };
+            setupPracticeScreen(text, roundConfig.duration, "", examInfo);
+        }
+    }
+
+    function processStageResult(score) {
+        resultsElements.insightsPlaceholder.classList.remove('hidden');
+        resultsElements.insightsContent.classList.add('hidden');
+        resultsElements.analysisSection.innerHTML = '';
+        resultsElements.learningSection.innerHTML = '';
+        resultsElements.explorationSection.innerHTML = '';
+
+        const roundIndex = appState.exam.currentRoundIndex;
+        const stageIndex = appState.exam.stagesToAttemptInCurrentRound[appState.exam.currentStageIndexInQueue];
+        const stage = appState.exam.stages[stageIndex];
+        const roundConfig = examRoundsConfig[roundIndex];
+
+        stage.attempts.push({ round: roundIndex, score: score });
+        stage.highestScore = Math.max(stage.highestScore, score);
+
+        if (score >= roundConfig.passingScore) {
+            stage.status = 'passed';
+            if (stage.passedInRound === -1) {
+                stage.passedInRound = roundIndex;
+            }
+        } else {
+            stage.status = 'failed';
+        }
+        
+        startNextStageFromQueue();
+    }
+    
+    function showRoundRecap() {
+        const roundIndex = appState.exam.currentRoundIndex;
+        const roundConfig = examRoundsConfig[roundIndex];
+        roundRecapElements.title.textContent = `Rekap Hasil ${roundConfig.name}`;
+
+        let detailsHTML = '';
+        appState.exam.stagesToAttemptInCurrentRound.forEach(stageIndex => {
+            const stage = appState.exam.stages[stageIndex];
+            const lastAttempt = stage.attempts.find(att => att.round === roundIndex);
+            if (!lastAttempt) return;
+
+            const isPassed = lastAttempt.score >= roundConfig.passingScore;
+            const statusText = isPassed ? 'Lulus' : 'Tidak Lulus';
+            const statusColor = isPassed ? 'text-green-600' : 'text-red-600';
+
+            detailsHTML += `
+                <div class="py-4 border-b border-slate-200 last:border-b-0 flex justify-between items-center">
+                    <div>
+                        <p class="font-bold text-slate-800 text-lg">Stage ${stageIndex + 1}: ${stage.type}</p>
+                        <p class="text-sm text-slate-500">Skor Anda: ${lastAttempt.score}</p>
+                    </div>
+                    <p class="font-bold text-lg ${statusColor}">${statusText}</p>
+                </div>
+            `;
+        });
+        roundRecapElements.details.innerHTML = detailsHTML;
+        
+        const failedStages = appState.exam.stages.filter(s => s.status === 'failed');
+        
+        if (failedStages.length === 0) {
+            audioFX.scoreHigh();
+            roundRecapElements.message.textContent = "Selamat! Semua stage telah berhasil diselesaikan.";
+            roundRecapElements.nextBtn.textContent = "Lihat Laporan Akhir";
+        } else if (roundIndex >= examRoundsConfig.length - 1) {
+            audioFX.scoreMid();
+            roundRecapElements.message.textContent = "Ujian telah selesai. Beberapa stage tidak berhasil diselesaikan.";
+            roundRecapElements.nextBtn.textContent = "Lihat Laporan Akhir";
+        } else {
+            audioFX.notification();
+            const nextRoundName = examRoundsConfig[roundIndex + 1].name;
+            roundRecapElements.message.textContent = `Stage yang tidak lulus akan diulang pada putaran ${nextRoundName}.`;
+            roundRecapElements.nextBtn.textContent = `Lanjutkan ke ${nextRoundName}`;
+        }
+
+        showScreen('roundRecap');
+    }
+
+    function handleNextRound() {
+        const failedStagesIndexes = appState.exam.stages.map((s, i) => s.status === 'failed' ? i : -1).filter(i => i !== -1);
+        
+        if (failedStagesIndexes.length === 0 || appState.exam.currentRoundIndex >= examRoundsConfig.length - 1) {
+            calculateAndShowFinalResults();
+        } else {
+            appState.exam.currentRoundIndex++;
+            appState.exam.stagesToAttemptInCurrentRound = failedStagesIndexes;
+            appState.exam.currentStageIndexInQueue = -1;
+            startNextStageFromQueue();
+        }
+    }
+
+    function calculateAndShowFinalResults() {
+        let totalScore = 0;
+        appState.exam.stages.forEach(stage => {
+            if (stage.passedInRound !== -1) {
+                const penalty = examRoundsConfig[stage.passedInRound].penalty;
+                stage.finalScore = Math.max(0, stage.highestScore - penalty);
+            } else {
+                 stage.finalScore = stage.highestScore;
+            }
+            totalScore += stage.finalScore;
+        });
+
+        const finalAverage = totalScore / examStageTopics.length;
+        const finalGrade = getGradeFromScore(finalAverage);
+        const finalGradeAttr = getScoreAttributes(finalAverage);
+        
+        examSummaryElements.finalResultDisplay.innerHTML = `
+            <h2 class="text-xl font-bold text-slate-800">Skor Rata-Rata Keseluruhan</h2>
+            <p class="text-7xl font-extrabold ${finalGradeAttr.text} my-2">${finalAverage.toFixed(1)}</p>
+            <p class="text-2xl font-bold ${finalGradeAttr.text}">(${finalGrade})</p>
+        `;
+
+        examSummaryElements.details.innerHTML = appState.exam.stages.map((stage, index) => {
+            const passedRoundConfig = stage.passedInRound !== -1 ? examRoundsConfig[stage.passedInRound] : null;
+            const history = stage.attempts.map(att => `[${examRoundsConfig[att.round].name.replace('Putaran ','P').replace('Remedial ','R')}: ${att.score}]`).join(' ');
+            const penaltyText = passedRoundConfig ? `Lulus pada: <span class="font-semibold">${passedRoundConfig.name}</span> (Penalti -${passedRoundConfig.penalty} poin)` : '<span class="font-semibold text-red-600">Status: Tidak Lulus</span>';
+            const finalScoreText = passedRoundConfig ? `${stage.finalScore} <span class='text-sm text-slate-400'>(${stage.highestScore} - ${passedRoundConfig.penalty})</span>` : `${stage.finalScore}`;
+            const finalScoreAttr = getScoreAttributes(stage.finalScore);
+            
+            return `
+                <div class="py-4 border-b border-slate-200 last:border-b-0">
+                    <h3 class="text-lg font-bold text-slate-800 mb-2">Stage ${index + 1}: ${stage.type}</h3>
+                    <div class="text-sm space-y-1 mb-3">
+                        <p class="text-slate-500">Riwayat Skor: <span class="font-medium text-slate-700">${history}</span></p>
+                        <p class="text-slate-500">Skor Tertinggi: <span class="font-medium text-slate-700">${stage.highestScore}</span></p>
+                        <p class="text-slate-500">${penaltyText}</p>
+                    </div>
+                    <div class="flex justify-between items-baseline pt-3 border-t border-slate-200/80">
+                        <span class="font-bold text-slate-800">Skor Akhir:</span>
+                        <span class="text-3xl font-bold ${finalScoreAttr.text}">${finalScoreText}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        renderFinalScoreChart();
+        showScreen('examSummary');
+    }
+    
+    function renderFinalScoreChart() {
+        const maxScore = 100;
+        const chartHTML = `
+            <div>
+                <h3 class="text-lg font-bold text-slate-800 mb-4 text-center">Visualisasi Skor Akhir per Stage</h3>
+                <div class="flex justify-around items-end h-48 space-x-2 py-4 border-y border-slate-200">
+                    ${appState.exam.stages.map((stage, index) => {
+                        const barHeight = (stage.finalScore / maxScore) * 100;
+                        const barColor = getScoreAttributes(stage.finalScore).bg;
+                        return `
+                            <div class="flex-1 flex flex-col items-center group">
+                                <div class="w-full flex items-end justify-center h-full">
+                                    <div class="w-3/4 ${barColor} rounded-t-md chart-bar relative" style="height: 0%;" data-height="${barHeight}%">
+                                        <span class="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">${stage.finalScore}</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs font-bold mt-2 text-center text-slate-500">S${index + 1}</p>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+        examSummaryElements.chartContainer.innerHTML = chartHTML;
+        setTimeout(() => {
+            document.querySelectorAll('.chart-bar').forEach(bar => {
+                bar.style.height = bar.dataset.height;
+            });
+        }, 100);
+    }
+
+
+    // --- Vocabulary Insights ---
+    async function handleGenerateInsights() {
+        const btn = buttons.generateInsights;
+        btn.disabled = true;
+        resultsElements.insightsPlaceholder.classList.add('hidden');
+        resultsElements.insightsContent.classList.remove('hidden');
+        resultsElements.insightsLoader.classList.remove('hidden');
+        
+        const sections = [resultsElements.analysisSection, resultsElements.learningSection, resultsElements.explorationSection];
+        sections.forEach(s => s.innerHTML = ``);
+        
+        try {
+            const insightsData = await fetchAI(OPENAI_MODEL, getVocabularyInsightsPrompt(), true);
+            
+            renderAnalysisSection(insightsData.analisis_terjemahan);
+            renderLearningSection(insightsData.peluang_belajar);
+            renderExplorationSection(insightsData.perluas_wawasan);
+
+        } catch (error) {
+            audioFX.error();
+            console.error("Gagal membuat wawasan kosakata:", error);
+            resultsElements.insightsContent.innerHTML = `<p class="text-red-600 p-4">Maaf, gagal memuat wawasan kosakata. Silakan coba lagi.</p>`;
+        } finally {
+            resultsElements.insightsLoader.classList.add('hidden');
+            btn.disabled = false;
+        }
+    }
+    
+    function createSectionHTML(title, content) { if (!content || content.trim() === '') return ''; return `<div class="space-y-3"><h3 class="text-sm font-bold text-slate-500 uppercase tracking-wider">${title}</h3><div class="space-y-3">${content}</div></div>`; }
+    function renderAnalysisSection(data) { const errors = data?.kesalahan_penerjemahan || []; const corrections = data?.perbaikan_diksi || []; let errorsHTML = ''; if (errors.length > 0) { errorsHTML = createSectionHTML('Kesalahan Penerjemahan', errors.map(item => `<div class="p-4 border-l-4 border-red-400 bg-red-50"><p class="text-sm text-slate-500">Teks Asli: <span class="font-semibold text-slate-700">"${item.teks_asli || 'N/A'}"</span></p><p class="text-sm text-slate-500 mt-1">Terjemahan Anda: <span class="font-semibold text-red-600 line-through">${item.terjemahan_pengguna || 'N/A'}</span></p><p class="text-sm text-slate-500 mt-1">Terjemahan Tepat: <span class="font-semibold text-green-600">${item.terjemahan_tepat || 'N/A'}</span></p><p class="text-sm text-slate-600 mt-2 pt-2 border-t border-red-200"><em>${item.penjelasan || 'Penjelasan tidak tersedia.'}</em></p></div>`).join('')); } let correctionsHTML = ''; if (corrections.length > 0) { correctionsHTML = createSectionHTML('Perbaikan Diksi', corrections.map(item => `<div class="p-4 border-l-4 border-yellow-400 bg-yellow-50"><p class="text-sm text-slate-500">Teks Asli: <span class="font-semibold text-slate-700">"${item.teks_asli || 'N/A'}"</span></p><p class="text-sm text-slate-500 mt-1">Anda menulis: <span class="font-semibold text-slate-700">"${item.kata_pengguna || 'N/A'}"</span></p><p class="text-sm text-slate-500 mt-1">Saran: <span class="font-semibold text-yellow-800">"${item.saran || 'N/A'}"</span></p><p class="text-sm text-slate-600 mt-2 pt-2 border-t border-yellow-200"><em>${item.alasan || 'Alasan tidak tersedia.'}</em></p></div>`).join('')); } if (errorsHTML || correctionsHTML) { resultsElements.analysisSection.innerHTML = `<h2 class="text-lg font-bold text-slate-800 mb-4">Analisis Terjemahan Anda</h2><div class="space-y-6">${errorsHTML}${correctionsHTML}</div>`; } }
+    function renderLearningSection(data) { const keywords = data?.kata_kunci || []; const terms = data?.istilah_sulit || []; const idioms = data?.ungkapan_idiom || []; let keywordsHTML = ''; if (keywords.length > 0) { keywordsHTML = createSectionHTML('Kata Kunci', keywords.map(item => `<div class="p-3 border-b border-slate-200 last:border-b-0"><p class="font-semibold text-slate-800">${item.istilah || 'N/A'}</p><p class="text-sm text-blue-600 font-medium">${item.terjemahan || 'N/A'}</p><p class="text-sm text-slate-500 mt-1">${item.definisi || 'Definisi tidak tersedia.'}</p></div>`).join('')); } let termsHTML = ''; if (terms.length > 0) { termsHTML = createSectionHTML('Istilah Sulit', terms.map(item => `<div class="p-3 border-b border-slate-200 last:border-b-0"><p class="font-semibold text-slate-800">${item.istilah || 'N/A'}</p><p class="text-sm text-blue-600 font-medium">${item.terjemahan || 'N/A'}</p><p class="text-sm text-slate-500 mt-1">${item.definisi || 'Definisi tidak tersedia.'}</p></div>`).join('')); } let idiomsHTML = ''; if (idioms.length > 0) { idiomsHTML = createSectionHTML('Ungkapan & Idiom', idioms.map(item => `<div class="p-3 border-b border-slate-200 last:border-b-0"><p class="font-semibold text-slate-800">"${item.frasa || 'N/A'}"</p><p class="text-sm text-blue-600 font-medium">${item.makna || 'N/A'}</p><p class="text-sm text-slate-500 mt-1">${item.penjelasan || 'Penjelasan tidak tersedia.'}</p></div>`).join('')); } if (keywordsHTML || termsHTML || idiomsHTML) { resultsElements.learningSection.innerHTML = `<h2 class="text-lg font-bold text-slate-800 mb-4">Peluang Belajar dari Teks</h2><div class="space-y-6">${keywordsHTML}${termsHTML}${idiomsHTML}</div>`; } }
+    function renderExplorationSection(data) { const contexts = data?.jelajah_konteks || []; const synonyms = data?.spektrum_sinonim || []; let contextsHTML = ''; if (contexts.length > 0) { contextsHTML = createSectionHTML('Jelajah Konteks', contexts.map(item => `<div class="p-3 border-b border-slate-200 last:border-b-0"><p class="font-semibold text-slate-700">Kata: <span class="text-blue-600 font-bold">"${item.kata_kunci || 'N/A'}"</span></p><div class="mt-2 space-y-2">${(item.contoh || []).map(ex => `<div class="p-2 bg-slate-50 rounded-md"><p class="text-xs font-semibold text-slate-500 uppercase">${ex.konteks || 'Konteks'}</p><p class="text-sm text-slate-700">"${ex.kalimat_sumber || 'N/A'}"</p><p class="text-sm text-blue-600">→ "${ex.kalimat_terjemahan || 'N/A'}"</p></div>`).join('')}</div></div>`).join('')); } let synonymsHTML = ''; if (synonyms.length > 0) { synonymsHTML = createSectionHTML('Spektrum Sinonim', synonyms.map(item => `<div class="p-3 border-b border-slate-200 last:border-b-0"><p class="font-semibold text-slate-700">Untuk kata: <span class="text-blue-600 font-bold">"${item.kata_asli || 'N/A'}"</span></p><div class="mt-2 space-y-1.5">${(item.alternatif || []).map(alt => `<p class="text-sm"><strong class="text-slate-800">${alt.sinonim || 'N/A'}:</strong> <span class="text-slate-500">${alt.konteks || 'Konteks tidak tersedia.'}</span></p>`).join('')}</div></div>`).join('')); } if (contextsHTML || synonymsHTML) { resultsElements.explorationSection.innerHTML = `<h2 class="text-lg font-bold text-slate-800 mb-4">Perluas Wawasan Anda</h2><div class="space-y-6">${contextsHTML}${synonymsHTML}</div>`; } }
+
+    // --- Prompt Generators ---
+    const getExercisePrompt = (config = null, choice = null) => {
+        const isEnId = configOptions.direction === 'en-id';
+        const language = isEnId ? 'English' : 'Indonesian';
+        
+        let promptConfig;
+        if (appState.currentMode === 'exam' && config && choice.domain) {
+            const levelMap = { 'Pemula': 'Beginner (A1)', 'Dasar': 'Elementary (A2)', 'Menengah': 'Intermediate (B1)', 'Menengah Atas': 'Upper-Intermediate (B2)', 'Mahir': 'Advanced (C1)', 'Profesional': 'Professional/Fluent (C2)' };
+            promptConfig = {
+                level: levelMap[config.level] || 'Intermediate (B1)',
+                paragraphs: config.paragraphs,
+                length: config.length,
+                domain: choice.domain,
+                style: config.style
+            };
+            let prompt = `Generate a text in ${language} for a language learner.\n- Language Level: ${promptConfig.level}.\n- Number of paragraphs: ${promptConfig.paragraphs}.\n- Paragraph length: ${promptConfig.length}.\n- The text must be from the domain of: "${promptConfig.domain}".\n- The text style must be: "${promptConfig.style}".\n\nYour first line of output MUST be the specific, random topic you chose, prefixed with "TOPIK: ". For example: "TOPIK: Sejarah Internet".\nFollow this with the generated text itself.\n- The text should be neutral and easy to understand.\n- Do not use markdown. Just provide plain text. Separate paragraphs with a single newline character.`;
+            return prompt;
+        } else { // Free Practice
+            promptConfig = {
+                level: configOptions.level.options[configOptions.level.current],
+                paragraphs: configOptions.paragraphs.current,
+                length: configOptions.length.options[configOptions.length.current],
+                domain: settings.domainInput.value.trim(),
+                topic: settings.topicInput.value.trim(),
+                style: settings.styleInput.value.trim()
+            };
+            let prompt = `Generate a text in ${language} for a language learner.\n- Language Level: ${promptConfig.level}.\n- Number of paragraphs: ${promptConfig.paragraphs}.\n- Paragraph length: ${promptConfig.length}.\n`;
+            if (promptConfig.domain) prompt += `- The text must be from the domain of: "${promptConfig.domain}".\n`;
+            if (promptConfig.topic) prompt += `- The topic must be about: "${promptConfig.topic}".\n`;
+            if (promptConfig.style) prompt += `- The text style must be: "${promptConfig.style}".\n`;
+            if (!promptConfig.topic && !promptConfig.domain && !promptConfig.style) prompt += `- The topic should be of general interest.\n`;
+            prompt += `- The text should be neutral and easy to understand.\n- Do not use markdown. Just provide plain text. Separate paragraphs with a single newline character.`;
+            return prompt;
+        }
+    };
+    const getEvaluationPrompt = (originalText, userTranslation) => { const isEnId = configOptions.direction === 'en-id'; const sourceLang = isEnId ? 'Inggris' : 'Indonesia'; const targetLang = isEnId ? 'Indonesia' : 'Inggris'; return `You are an expert translation evaluator. Analyze the user's translation and provide a structured evaluation. All explanatory text must be in Indonesian. - Source Text (${sourceLang}): "${originalText}" - User's Translation (${targetLang}): "${userTranslation}" Provide your response ONLY as a valid JSON object. Follow this structure precisely: { "terjemahan_alternatif": ["string", "string", "string"], "umpan_balik_akhir_ai": "string", "umpan_balik_aspek": { "kelengkapan_teks": "string", "akurasi": "string", "kelancaran": "string", "gaya": "string", "teknis": "string" }, "kelengkapan_teks": { "skor": 0 }, "rincian_penilaian": { "akurasi": { "ketepatan_makna": 0, "ketepatan_informasi": 0, "kesesuaian_istilah": 0, "implikatur_dan_inferensi": 0, "kejelasan_dan_bebas_ambiguitas": 0 }, "kelancaran": { "tata_bahasa": 0, "struktur_kalimat": 0, "diksi": 0, "koherensi_dan_kohesi": 0 }, "gaya": { "tingkat_formalitas": 0, "nada_dan_suasana": 0, "idiom_dan_budaya": 0 }, "teknis": { "konsistensi_istilah": 0, "format_dan_tanda_baca": 0, "adaptasi_teknis_dan_lokalisasi": 0 } } } Instructions: 1. **terjemahan_alternatif**: Provide 3 valid, high-quality alternative translations in ${targetLang}. 2. **umpan_balik_akhir_ai**: Write a concise, constructive final feedback summary in Indonesian. 3. **umpan_balik_aspek**: For each aspect key, provide a brief, constructive feedback in Indonesian. 4. **kelengkapan_teks**: Score the completeness from 0-100. 5. **rincian_penilaian**: Score every single sub-aspect from 0-100. Do not omit any.`; };
+    const getOriginalHighlightPrompt = (original, user, correct) => { const isEnId = configOptions.direction === 'en-id'; const sourceLang = isEnId ? 'English' : 'Indonesian'; const targetLang = isEnId ? 'Indonesian' : 'Inggris'; return `You are a translation error analysis expert. Your task is to find errors in the user's translation by comparing it to the correct translation, and then map those errors back to the original ${sourceLang} text. 1. **Analyze:** Compare the user's ${targetLang} translation with the correct ${targetLang} translation. Identify specific phrases or words where the user's translation was inaccurate, awkward, or incorrect. 2. **Map to Source:** For each error found, identify the corresponding phrase or word in the original ${sourceLang} text. 3. **Assign Severity:** Assign a severity level to each error: 'cukup' (minor error), 'buruk' (significant error), 'sangat-buruk' (critical error). 4. **Format Response:** Respond ONLY with a valid JSON object. The object must have one key, "highlights", which is an array of objects. Each object must have two keys: "text" (the exact phrase from the original ${sourceLang} text) and "level" (the severity). If there are no significant errors, return an empty array. --- Original ${sourceLang} Text: "${original}" --- User's ${targetLang} Translation: "${user}" --- Correct ${targetLang} Translation: "${correct}" ---`; };
+    const getUserHighlightPrompt = (user, correct) => { const isEnId = configOptions.direction === 'en-id'; const targetLang = isEnId ? 'Indonesian' : 'Inggris'; return `You are a language error analysis expert. Your task is to find errors directly within the user's ${targetLang} translation by comparing it to the correct translation. 1. **Analyze:** Compare the user's translation with the correct translation. Identify specific phrases or words where the user's translation is inaccurate, awkward, or incorrect. 2. **Assign Severity:** Assign a severity level to each error: 'cukup' (minor error), 'buruk' (significant error), 'sangat-buruk' (critical error). 3. **Format Response:** Respond ONLY with a valid JSON object. The object must have one key, "highlights", which is an array of objects. Each object must have two keys: "text" (the exact phrase from the **user's translation**) and "level" (the severity). If there are no significant errors, return an empty array. --- User's ${targetLang} Translation: "${user}" --- Correct ${targetLang} Translation: "${correct}" ---`; };
+    const getVocabularyInsightsPrompt = () => { const isEnId = configOptions.direction === 'en-id'; const sourceLang = isEnId ? 'English' : 'Indonesian'; const targetLang = isEnId ? 'Indonesian' : 'English'; return `You are a language learning assistant. Analyze the following texts and provide vocabulary insights. All explanatory text (definisi, penjelasan, konteks, alasan) must be in Indonesian. - Source Text (${sourceLang}): "${appState.originalSourceText}" - User's Translation (${targetLang}): "${appState.userTranslationText}" Your task is to generate a valid JSON object that strictly follows this schema. DO NOT omit any keys, even if the array is empty. { "analisis_terjemahan": { "kesalahan_penerjemahan": [ { "teks_asli": "string", "terjemahan_pengguna": "string", "terjemahan_tepat": "string", "penjelasan": "string" } ], "perbaikan_diksi": [ { "teks_asli": "string", "kata_pengguna": "string", "saran": "string", "alasan": "string" } ] }, "peluang_belajar": { "kata_kunci": [ { "istilah": "string", "terjemahan": "string", "definisi": "string" } ], "istilah_sulit": [ { "istilah": "string", "terjemahan": "string", "definisi": "string" } ], "ungkapan_idiom": [ { "frasa": "string", "makna": "string", "penjelasan": "string" } ] }, "perluas_wawasan": { "jelajah_konteks": [ { "kata_kunci": "string", "contoh": [ { "konteks": "string", "kalimat_sumber": "string", "kalimat_terjemahan": "string" } ] } ], "spektrum_sinonim": [ { "kata_asli": "string", "alternatif": [ { "sinonim": "string", "konteks": "string" } ] } ] } } Instructions for each key: - **kesalahan_penerjemahan**: Identify 1-2 clear translation errors. - **perbaikan_diksi**: Find 1-2 instances where word choice could be improved. Provide the source text for context. - **kata_kunci**: Identify 2-3 common but important keywords. - **istilah_sulit**: Identify 1-2 difficult or domain-specific terms. - **ungkapan_idiom**: Identify any idioms. If none, return []. - **jelajah_konteks**: Pick 1 keyword and show 2 different uses. - **spektrum_sinonim**: Pick 1 keyword from the user's translation and provide 3 alternatives. Respond ONLY with the valid JSON object.`; };
+
+    // --- Inisialisasi Aplikasi ---
+    function initializeAppUI() { 
+        updateSelectorUI('length'); 
+        updateSelectorUI('level'); 
+        updateSegmentedControl(settings.paragraphsToggle, configOptions.paragraphs.current); 
+        updateDurationSlider();
+        settings.level.label.textContent = `Tingkat Bahasa ${configOptions.direction === 'en-id' ? 'Inggris' : 'Indonesia'}`;
+        
+        appState.currentMode = 'free';
+        updateSegmentedControl(mainMenuElements.modeToggle, 'free');
+        mainMenuElements.subtitle.textContent = "Atur sendiri tingkat kesulitan, durasi, dan topik latihan Anda.";
+        buttons.mainStart.textContent = "Mulai Latihan";
+        const settingsDiv = mainMenuElements.freePracticeSettings;
+        settingsDiv.style.maxHeight = settingsDiv.scrollHeight + "px";
+        settingsDiv.style.opacity = '1';
+
+        new ResizeObserver(() => {
+            if(screens.mainMenu.offsetParent !== null) {
+                updateSegmentedControl(mainMenuElements.modeToggle, appState.currentMode);
+                updateSegmentedControl(settings.paragraphsToggle, configOptions.paragraphs.current);
+                updateDurationSlider();
+            }
+        }).observe(screens.mainMenu);
+    }
+
+    function initializeApp() {
+        initializeAppUI();
+        showScreen('mainMenu');
+        settings.duration.slider.addEventListener('input', () => { audioFX.navSelect(); updateDurationSlider(); });
+    }
+    
+    document.addEventListener('DOMContentLoaded', initializeApp);
+</script>
+</body>
+</html>
+
