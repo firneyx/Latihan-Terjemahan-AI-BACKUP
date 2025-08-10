@@ -8,7 +8,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        html, body {
+            height: 100%;
+            overflow: hidden; /* Mencegah scroll di level body */
+        }
         body { font-family: 'Inter', sans-serif; background-color: #f8fafc; /* slate-50 */ color: #334155; /* slate-700 */ }
+        .app-container {
+            height: 100%;
+            overflow-y: auto; /* Mengizinkan scroll di dalam container utama jika perlu */
+        }
         .app-screen { transition: opacity 0.4s ease-in-out; width: 100%; }
         .loader-container, .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 999; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1rem; opacity: 0; pointer-events: none; transition: opacity 0.3s ease-in-out; }
         .loader-container.visible, .modal-overlay.visible { opacity: 1; pointer-events: auto; }
@@ -84,7 +92,7 @@
         </div>
     </div>
 
-    <div class="w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div id="app-container" class="app-container w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         
         <div id="main-menu-screen" class="app-screen py-8 md:py-12">
             <header class="text-center mb-10">
@@ -163,14 +171,14 @@
         </div>
 
         <div id="practice-screen" class="app-screen hidden">
-            <div id="practice-container" class="flex flex-col h-[calc(100vh-1rem)]">
+            <div id="practice-container" class="flex flex-col">
                 <header class="py-2.5 border-b border-slate-200 flex-shrink-0"><div class="grid grid-cols-3 items-center"><div class="flex justify-start"><button id="back-btn" class="p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full" title="Keluar"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg></button></div><div class="text-center"><h3 id="practice-header-title" class="font-semibold text-slate-800 text-lg"></h3><div id="timer-display" class="hidden items-center justify-center gap-2 text-sm font-semibold text-slate-800"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg><span id="timer-label"></span></div></div><div class="flex justify-end"><button id="header-submit-btn" class="bg-blue-600 text-white font-semibold py-1.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 focus:ring-blue-500 transition-all text-sm">Selesai</button></div></div></header>
                 <main class="py-6 flex-grow overflow-y-auto">
                     <div id="practice-info-display" class="hidden p-4 mb-4 bg-slate-100 rounded-lg space-y-1 text-sm"></div>
                     <p id="instruction-text" class="mb-4 text-slate-500"></p>
                     <div id="source-text" class="text-slate-700 leading-relaxed text-base md:text-lg space-y-4"></div>
                 </main>
-                <footer class="flex-shrink-0 bg-slate-50 pt-2 pb-12"><div id="status-message" class="text-sm mb-1 text-center opacity-0 transition-all duration-300 h-6"></div><div class="flex flex-col gap-2"><div class="input-wrapper bg-white border border-slate-200 rounded-xl shadow-sm"><div class="highlighter"></div><textarea id="translation-input" rows="1" class="border-transparent focus:ring-0 focus:border-transparent" placeholder="Ketik terjemahan Anda..."></textarea></div></div></footer>
+                <footer class="flex-shrink-0 bg-slate-50 pt-2 pb-4"><div id="status-message" class="text-sm mb-1 text-center opacity-0 transition-all duration-300 h-6"></div><div class="flex flex-col gap-2"><div class="input-wrapper bg-white border border-slate-200 rounded-xl shadow-sm"><div class="highlighter"></div><textarea id="translation-input" rows="1" class="border-transparent focus:ring-0 focus:border-transparent" placeholder="Ketik terjemahan Anda..."></textarea></div></div></footer>
             </div>
         </div>
 
@@ -315,7 +323,9 @@
         domainError: document.getElementById('domain-error'),
         startBtn: document.getElementById('start-stage-btn')
     };
-    const practiceElements = { timer: document.getElementById('timer-display'), timerLabel: document.getElementById('timer-label'), headerTitle: document.getElementById('practice-header-title'), infoDisplay: document.getElementById('practice-info-display'), instructionText: document.getElementById('instruction-text'), sourceText: document.getElementById('source-text'), translationInput: document.getElementById('translation-input'), highlighter: document.querySelector('.highlighter'), statusMessage: document.getElementById('status-message') };
+    const practiceElements = { 
+        container: document.getElementById('practice-container'),
+        timer: document.getElementById('timer-display'), timerLabel: document.getElementById('timer-label'), headerTitle: document.getElementById('practice-header-title'), infoDisplay: document.getElementById('practice-info-display'), instructionText: document.getElementById('instruction-text'), sourceText: document.getElementById('source-text'), translationInput: document.getElementById('translation-input'), highlighter: document.querySelector('.highlighter'), statusMessage: document.getElementById('status-message') };
     const resultsElements = { 
         mainScoreSection: document.getElementById('main-score-section'), 
         footer: document.getElementById('results-footer'),
@@ -440,7 +450,7 @@
                 messages: [{ role: "user", content: prompt }],
                 model: model,
                 temperature: 1,
-                max_tokens: 8192,
+                max_completion_tokens: 8192,
                 top_p: 1,
                 stream: false,
             };
@@ -523,7 +533,21 @@
         if (score >= 70) return 'C';
         return 'Tidak Lulus';
     };
-    const showScreen = (screenName) => { Object.values(screens).forEach(screen => screen.classList.add('hidden')); screens[screenName].style.opacity = 0; screens[screenName].classList.remove('hidden'); setTimeout(() => screens[screenName].style.opacity = 1, 50); };
+    const showScreen = (screenName) => { 
+        Object.values(screens).forEach(screen => screen.classList.add('hidden')); 
+        screens[screenName].style.opacity = 0; 
+        screens[screenName].classList.remove('hidden'); 
+        setTimeout(() => screens[screenName].style.opacity = 1, 50); 
+        
+        const appContainer = document.getElementById('app-container');
+        if (screenName === 'practice') {
+            appContainer.style.overflowY = 'hidden';
+            adjustPracticeViewHeight();
+        } else {
+            appContainer.style.overflowY = 'auto';
+            practiceElements.container.style.height = 'auto';
+        }
+    };
     const showLoader = (visible, text = "Memuat...", type = 'analysis') => { 
         if(visible) { audioFX.startLoading(); } else { audioFX.stopLoading(); }
         loader.text.textContent = text; loader.element.className = 'loader'; loader.element.classList.add(type); loader.container.classList.toggle('visible', visible); 
@@ -1319,7 +1343,13 @@
     const getUserHighlightPrompt = (user, correct) => { const isEnId = configOptions.direction === 'en-id'; const targetLang = isEnId ? 'Indonesian' : 'Inggris'; return `You are a language error analysis expert. Your task is to find errors directly within the user's ${targetLang} translation by comparing it to the correct translation. 1. **Analyze:** Compare the user's translation with the correct translation. Identify specific phrases or words where the user's translation is inaccurate, awkward, or incorrect. 2. **Assign Severity:** Assign a severity level to each error: 'cukup' (minor error), 'buruk' (significant error), 'sangat-buruk' (critical error). 3. **Format Response:** Respond ONLY with a valid JSON object. The object must have one key, "highlights", which is an array of objects. Each object must have two keys: "text" (the exact phrase from the **user's translation**) and "level" (the severity). If there are no significant errors, return an empty array. --- User's ${targetLang} Translation: "${user}" --- Correct ${targetLang} Translation: "${correct}" ---`; };
     const getVocabularyInsightsPrompt = () => { const isEnId = configOptions.direction === 'en-id'; const sourceLang = isEnId ? 'English' : 'Indonesian'; const targetLang = isEnId ? 'Indonesian' : 'English'; return `You are a language learning assistant. Analyze the following texts and provide vocabulary insights. All explanatory text (definisi, penjelasan, konteks, alasan) must be in Indonesian. - Source Text (${sourceLang}): "${appState.originalSourceText}" - User's Translation (${targetLang}): "${appState.userTranslationText}" Your task is to generate a valid JSON object that strictly follows this schema. DO NOT omit any keys, even if the array is empty. { "analisis_terjemahan": { "kesalahan_penerjemahan": [ { "teks_asli": "string", "terjemahan_pengguna": "string", "terjemahan_tepat": "string", "penjelasan": "string" } ], "perbaikan_diksi": [ { "teks_asli": "string", "kata_pengguna": "string", "saran": "string", "alasan": "string" } ] }, "peluang_belajar": { "kata_kunci": [ { "istilah": "string", "terjemahan": "string", "definisi": "string" } ], "istilah_sulit": [ { "istilah": "string", "terjemahan": "string", "definisi": "string" } ], "ungkapan_idiom": [ { "frasa": "string", "makna": "string", "penjelasan": "string" } ] }, "perluas_wawasan": { "jelajah_konteks": [ { "kata_kunci": "string", "contoh": [ { "konteks": "string", "kalimat_sumber": "string", "kalimat_terjemahan": "string" } ] } ], "spektrum_sinonim": [ { "kata_asli": "string", "alternatif": [ { "sinonim": "string", "konteks": "string" } ] } ] } } Instructions for each key: - **kesalahan_penerjemahan**: Identify 1-2 clear translation errors. - **perbaikan_diksi**: Find 1-2 instances where word choice could be improved. Provide the source text for context. - **kata_kunci**: Identify 2-3 common but important keywords. - **istilah_sulit**: Identify 1-2 difficult or domain-specific terms. - **ungkapan_idiom**: Identify any idioms. If none, return []. - **jelajah_konteks**: Pick 1 keyword and show 2 different uses. - **spektrum_sinonim**: Pick 1 keyword from the user's translation and provide 3 alternatives. Respond ONLY with the valid JSON object.`; };
 
-    // --- Inisialisasi Aplikasi ---
+    // --- Inisialisasi & Mobile Fix ---
+    function adjustPracticeViewHeight() {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+        practiceElements.container.style.height = `calc(var(--vh, 1vh) * 100)`;
+    }
+
     function initializeAppUI() { 
         updateSelectorUI('length'); 
         updateSelectorUI('level'); 
@@ -1348,6 +1378,7 @@
         initializeAppUI();
         showScreen('mainMenu');
         settings.duration.slider.addEventListener('input', () => { audioFX.navSelect(); updateDurationSlider(); });
+        window.addEventListener('resize', adjustPracticeViewHeight);
     }
     
     document.addEventListener('DOMContentLoaded', initializeApp);
